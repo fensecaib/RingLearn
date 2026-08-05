@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RingLearn</string>
+    <string name="notification_channel_name">学习提醒</string>
+    <string name="notification_channel_desc">每天定时提醒你背单词</string>
+    <string name="reminder_notification_text">该背单词啦！今天也要坚持学习哦。</string>
+</resources>
