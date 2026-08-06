@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -22,7 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -32,20 +31,23 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
 import com.ringlearn.app.ui.components.EmptyState
+import com.ringlearn.app.ui.ime.RingLearnTextField
 import com.ringlearn.app.ui.rememberHapticManager
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
-/** 生词本：搜索 + 列表 + 移除 */
+/** 生词本：搜索（内置罗马音键盘/系统输入法）+ 列表 + 移除 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WordBookScreen(
@@ -53,9 +55,23 @@ fun WordBookScreen(
 ) {
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
+    val useInAppKeyboard by viewModel.useInAppKeyboard.collectAsStateWithLifecycle()
     val haptic = rememberHapticManager()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // 输入框状态：与 ViewModel 双向同步
+    val textFieldState = remember { TextFieldState() }
+    LaunchedEffect(textFieldState) {
+        snapshotFlow { textFieldState.text.toString() }
+            .distinctUntilChanged()
+            .collect { viewModel.onQueryChange(it) }
+    }
+    LaunchedEffect(query) {
+        if (textFieldState.text.toString() != query) {
+            textFieldState.edit { replace(0, length, query) }
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -70,31 +86,36 @@ fun WordBookScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = viewModel::onQueryChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("搜索单词 / 假名 / 释义") },
+            RingLearnTextField(
+                state = textFieldState,
+                useInAppKeyboard = useInAppKeyboard,
+                haptic = haptic,
+                onSwitchToSystemIme = viewModel::onSwitchToSystemIme,
+                onSwitchToInAppKeyboard = viewModel::onSwitchToInAppKeyboard,
+                onCommit = {},
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                placeholder = "搜索单词 / 假名 / 释义",
                 leadingIcon = {
                     Icon(
                         painter = painterResource(R.drawable.ic_search),
-                        contentDescription = null
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
                     )
                 },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.onQueryChange("") }) {
+                        IconButton(onClick = {
+                            haptic.click()
+                            viewModel.onQueryChange("")
+                        }) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_close),
                                 contentDescription = "清空"
                             )
                         }
                     }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp)
+                }
             )
 
             if (favorites.isEmpty()) {

@@ -36,6 +36,7 @@ class SettingsRepository @Inject constructor(
         val SOUND_ENABLED = booleanPreferencesKey("sound_enabled")
         val VIBRATION_ENABLED = booleanPreferencesKey("vibration_enabled")
         val AUTO_SPEAK_ENABLED = booleanPreferencesKey("auto_speak_enabled")
+        val USE_IN_APP_KEYBOARD = booleanPreferencesKey("use_in_app_keyboard")
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data
@@ -53,7 +54,8 @@ class SettingsRepository @Inject constructor(
                 reminderMinute = (p[Keys.REMINDER_MINUTE] ?: 0).coerceIn(0, 59),
                 soundEnabled = p[Keys.SOUND_ENABLED] ?: true,
                 vibrationEnabled = p[Keys.VIBRATION_ENABLED] ?: true,
-                autoSpeakEnabled = p[Keys.AUTO_SPEAK_ENABLED] ?: false
+                autoSpeakEnabled = p[Keys.AUTO_SPEAK_ENABLED] ?: false,
+                useInAppKeyboard = p[Keys.USE_IN_APP_KEYBOARD] ?: true
             )
         }
 
@@ -86,5 +88,9 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setAutoSpeakEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.AUTO_SPEAK_ENABLED] = enabled }
+    }
+
+    suspend fun setUseInAppKeyboard(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.USE_IN_APP_KEYBOARD] = enabled }
     }
 }

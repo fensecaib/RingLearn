@@ -48,6 +48,21 @@ interface WordDao {
     )
     fun observeFavorites(query: String): Flow<List<WordEntity>>
 
+    /** 查词：按 表记/假名/释义 模糊匹配（LIKE 已做 % _ 转义，配合 ESCAPE '\\'） */
+    @Query(
+        "SELECT * FROM words WHERE " +
+            "(word LIKE '%' || :q || '%' ESCAPE '\\' OR kana LIKE '%' || :q || '%' ESCAPE '\\' OR meaning LIKE '%' || :q || '%' ESCAPE '\\') " +
+            "ORDER BY CASE " +
+            "WHEN word = :q THEN 0 " +
+            "WHEN kana = :q THEN 1 " +
+            "WHEN word LIKE :q || '%' ESCAPE '\\' THEN 2 " +
+            "ELSE 3 END, id ASC"
+    )
+    fun observeLookup(q: String): Flow<List<WordEntity>>
+
+    @Query("SELECT * FROM words")
+    suspend fun getAllWords(): List<WordEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(words: List<WordEntity>)
 
@@ -65,3 +80,7 @@ interface WordDao {
     )
     suspend fun resetAllProgress()
 }
+
+
+
+

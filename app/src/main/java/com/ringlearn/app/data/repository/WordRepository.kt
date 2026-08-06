@@ -102,7 +102,20 @@ class WordRepository @Inject constructor(
 
     suspend fun getRandomWords(count: Int): List<WordEntity> = wordDao.getRandomWords(count)
 
+    /** 词库中出现过的全部唯一字符（用于构建手写识别模板，仅词库规模，轻量） */
+    suspend fun getAllCharacters(): Set<Char> = withContext(Dispatchers.IO) {
+        wordDao.getAllWords()
+            .flatMap { (it.word + it.kana).asIterable() }
+            .toSet()
+    }
+
     fun observeFavorites(query: String): Flow<List<WordEntity>> = wordDao.observeFavorites(query)
+
+    /** 查词：按 表记/假名/释义 模糊匹配（已做 LIKE 通配符转义） */
+    fun observeLookup(query: String): Flow<List<WordEntity>> = wordDao.observeLookup(query.escapeLike())
+
+    private fun String.escapeLike(): String =
+        replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     suspend fun setFavorite(wordId: Long, favorite: Boolean) {
         val word = wordDao.getWord(wordId) ?: return
@@ -177,3 +190,5 @@ class WordRepository @Inject constructor(
         const val DAY_MILLIS = 24 * 60 * 60 * 1000L
     }
 }
+
+

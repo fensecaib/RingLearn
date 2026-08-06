@@ -56,7 +56,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import com.ringlearn.app.R
@@ -80,6 +80,7 @@ fun HomeScreen(
     onNavigateToStudy: () -> Unit,
     onNavigateToWordBook: () -> Unit,
     onNavigateToQuiz: () -> Unit,
+    onNavigateToLookup: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -137,6 +138,7 @@ fun HomeScreen(
                     onStartStudy = onNavigateToStudy,
                     onOpenWordBook = onNavigateToWordBook,
                     onOpenQuiz = onNavigateToQuiz,
+                    onOpenLookup = onNavigateToLookup,
                     onSetDailyGoal = viewModel::setDailyGoal,
                     onSetThemeMode = viewModel::setThemeMode,
                     onSetSound = viewModel::setSoundEnabled,
@@ -211,6 +213,7 @@ private fun HomeContent(
     onStartStudy: () -> Unit,
     onOpenWordBook: () -> Unit,
     onOpenQuiz: () -> Unit,
+    onOpenLookup: () -> Unit,
     onSetDailyGoal: (Int) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetSound: (Boolean) -> Unit,
@@ -256,7 +259,8 @@ private fun HomeContent(
             QuickActionsRow(
                 onStartStudy = { haptic.click(); onStartStudy() },
                 onOpenWordBook = { haptic.click(); onOpenWordBook() },
-                onOpenQuiz = { haptic.click(); onOpenQuiz() }
+                onOpenQuiz = { haptic.click(); onOpenQuiz() },
+                onOpenLookup = { haptic.click(); onOpenLookup() }
             )
         }
 
@@ -426,7 +430,8 @@ private fun DueBadgeCard(dueCount: Int, modifier: Modifier = Modifier) {
 private fun QuickActionsRow(
     onStartStudy: () -> Unit,
     onOpenWordBook: () -> Unit,
-    onOpenQuiz: () -> Unit
+    onOpenQuiz: () -> Unit,
+    onOpenLookup: () -> Unit
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         QuickActionCard(
@@ -446,6 +451,12 @@ private fun QuickActionsRow(
             label = "随机测验",
             modifier = Modifier.weight(1f),
             onClick = onOpenQuiz
+        )
+        QuickActionCard(
+            icon = R.drawable.ic_search,
+            label = "查词",
+            modifier = Modifier.weight(1f),
+            onClick = onOpenLookup
         )
     }
 }
@@ -717,3 +728,5 @@ private fun ThemeMode.label(): String = when (this) {
     ThemeMode.LIGHT -> "浅色"
     ThemeMode.DARK -> "深色"
 }
+
+
