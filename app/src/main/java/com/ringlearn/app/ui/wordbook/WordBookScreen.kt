@@ -42,7 +42,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
 import com.ringlearn.app.ui.components.EmptyState
-import com.ringlearn.app.ui.ime.RingLearnTextField
+import com.ringlearn.app.ui.ime.RingLearnImeCandidateBar
+import com.ringlearn.app.ui.ime.RingLearnImeField
+import com.ringlearn.app.ui.ime.RomajiKeyboard
+import com.ringlearn.app.ui.ime.rememberRingLearnImeState
 import com.ringlearn.app.ui.rememberHapticManager
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -92,20 +95,21 @@ fun WordBookScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
+        val ime = rememberRingLearnImeState(
+            state = textFieldState,
+            onSwitchToSystemIme = viewModel::onSwitchToSystemIme,
+            onCompositionChange = viewModel::onCompositionChange,
+            onCommit = {}
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            RingLearnTextField(
-                state = textFieldState,
+            RingLearnImeField(
+                ime = ime,
                 useInAppKeyboard = useInAppKeyboard,
-                haptic = haptic,
-                onSwitchToSystemIme = viewModel::onSwitchToSystemIme,
                 onSwitchToInAppKeyboard = viewModel::onSwitchToInAppKeyboard,
-                onCompositionChange = viewModel::onCompositionChange,
-                imeDictionaryCandidates = imeDictionaryCandidates,
-                onCommit = {},
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 placeholder = "搜索单词 / 假名 / 释义",
                 leadingIcon = {
@@ -131,35 +135,57 @@ fun WordBookScreen(
                 }
             )
 
-            if (favorites.isEmpty()) {
-                val hasQuery = query.isNotBlank()
-                EmptyState(
-                    iconRes = R.drawable.ic_bookmark,
-                    title = if (hasQuery) "没有匹配的单词" else "生词本还是空的",
-                    subtitle = if (hasQuery) {
-                        "换个关键词试试吧。"
-                    } else {
-                        "在学习卡片时上滑即可把单词收进生词本，\n方便随时集中复习。"
-                    }
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    items(favorites, key = { it.id }) { word ->
-                        FavoriteWordItem(
-                            word = word,
-                            onRemove = {
-                                haptic.click()
-                                viewModel.removeFromBook(word.id)
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("已从生词本移除：${word.word}")
+            // 列表 / 空状态：占满中间剩余空间（键盘停靠在底部时不被挤压）
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                if (favorites.isEmpty()) {
+                    val hasQuery = query.isNotBlank()
+                    EmptyState(
+                        iconRes = R.drawable.ic_bookmark,
+                        title = if (hasQuery) "没有匹配的单词" else "生词本还是空的",
+                        subtitle = if (hasQuery) {
+                            "换个关键词试试吧。"
+                        } else {
+                            "在学习卡片时上滑即可把单词收进生词本，\n方便随时集中复习。"
+                        }
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        items(favorites, key = { it.id }) { word ->
+                            FavoriteWordItem(
+                                word = word,
+                                onRemove = {
+                                    haptic.click()
+                                    viewModel.removeFromBook(word.id)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("已从生词本移除：${word.word}")
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
+            }
+
+            // 键盘停靠底部（仅内置键盘模式）
+            if (useInAppKeyboard) {
+                RingLearnImeCandidateBar(
+                    ime = ime,
+                    imeDictionaryCandidates = imeDictionaryCandidates,
+                    haptic = haptic
+                )
+                RomajiKeyboard(
+                    layout = ime.keyboardLayout,
+                    kanaMode = ime.kanaMode,
+                    haptic = haptic,
+                    onKey = ime::handleKey
+                )
             }
         }
     }

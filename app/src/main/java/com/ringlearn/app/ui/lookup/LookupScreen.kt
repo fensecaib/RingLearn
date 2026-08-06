@@ -66,7 +66,10 @@ import androidx.compose.foundation.text.input.TextFieldState
 import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
 import com.ringlearn.app.ui.components.EmptyState
-import com.ringlearn.app.ui.ime.RingLearnTextField
+import com.ringlearn.app.ui.ime.RingLearnImeCandidateBar
+import com.ringlearn.app.ui.ime.RingLearnImeField
+import com.ringlearn.app.ui.ime.RomajiKeyboard
+import com.ringlearn.app.ui.ime.rememberRingLearnImeState
 import com.ringlearn.app.ui.rememberHapticManager
 import com.ringlearn.app.ui.rememberTtsManager
 import com.ringlearn.app.util.HapticManager
@@ -120,6 +123,12 @@ fun LookupScreen(
         contentWindowInsets = WindowInsets(0),
         topBar = { CenterAlignedTopAppBar(title = { Text("查词") }) }
     ) { padding ->
+        val ime = rememberRingLearnImeState(
+            state = textFieldState,
+            onSwitchToSystemIme = viewModel::onSwitchToSystemIme,
+            onCompositionChange = viewModel::onCompositionChange,
+            onCommit = {}
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -145,15 +154,10 @@ fun LookupScreen(
 
             when (inputMode) {
                 LookupInputMode.KEYBOARD -> {
-                    RingLearnTextField(
-                        state = textFieldState,
+                    RingLearnImeField(
+                        ime = ime,
                         useInAppKeyboard = useInAppKeyboard,
-                        haptic = haptic,
-                        onSwitchToSystemIme = viewModel::onSwitchToSystemIme,
                         onSwitchToInAppKeyboard = viewModel::onSwitchToInAppKeyboard,
-                        onCompositionChange = viewModel::onCompositionChange,
-                        imeDictionaryCandidates = imeDictionaryCandidates,
-                        onCommit = {},
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         placeholder = "输入日文或中文释义",
                         leadingIcon = {
@@ -192,33 +196,54 @@ fun LookupScreen(
                 }
             }
 
-            // 结果区：空 / 未找到 / 列表
-            when {
-                query.isBlank() -> EmptyState(
-                    iconRes = R.drawable.ic_search,
-                    title = "输入关键字或手写汉字",
-                    subtitle = "支持日文表记、假名读音、中文释义查询。\n键盘默认使用内置罗马音键盘，可一键切换系统输入法。"
-                )
-                results.isEmpty() -> EmptyState(
-                    iconRes = R.drawable.ic_refresh,
-                    title = "没有找到相关单词",
-                    subtitle = "换个写法试试：\n今日 / きょう / 今天"
-                )
-                else -> LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    items(results, key = { it.id }) { word ->
+            // 结果区：占满中间剩余空间（键盘停靠在底部时不被挤压）
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                when {
+                    query.isBlank() -> EmptyState(
+                        iconRes = R.drawable.ic_search,
+                        title = "输入关键字或手写汉字",
+                        subtitle = "支持日文表记、假名读音、中文释义查询。\n键盘默认使用内置罗马音键盘，可一键切换系统输入法。"
+                    )
+                    results.isEmpty() -> EmptyState(
+                        iconRes = R.drawable.ic_refresh,
+                        title = "没有找到相关单词",
+                        subtitle = "换个写法试试：\n今日 / きょう / 今天"
+                    )
+                    else -> LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        items(results, key = { it.id }) { word ->
 
-                        WordLookupCard(
-                            word = word,
-                            haptic = haptic,
-                            onSpeak = { tts.speak(word.word) },
-                            onToggleFavorite = { viewModel.onToggleFavorite(word) }
-                        )
+                            WordLookupCard(
+                                word = word,
+                                haptic = haptic,
+                                onSpeak = { tts.speak(word.word) },
+                                onToggleFavorite = { viewModel.onToggleFavorite(word) }
+                            )
+                        }
                     }
                 }
+            }
+
+            // 键盘停靠底部（仅内置键盘 + 键盘输入模式）
+            if (useInAppKeyboard && inputMode == LookupInputMode.KEYBOARD) {
+                RingLearnImeCandidateBar(
+                    ime = ime,
+                    imeDictionaryCandidates = imeDictionaryCandidates,
+                    haptic = haptic
+                )
+                RomajiKeyboard(
+                    layout = ime.keyboardLayout,
+                    kanaMode = ime.kanaMode,
+                    haptic = haptic,
+                    onKey = ime::handleKey
+                )
             }
         }
     }

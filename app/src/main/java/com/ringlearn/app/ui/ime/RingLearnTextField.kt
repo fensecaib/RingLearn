@@ -25,9 +25,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -49,53 +51,37 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.max
 
 /**
- * 统一的“应用内输入框”v2（类 IME 体验）：
- * - [useInAppKeyboard] = true：使用应用内置键盘（罗马音 / 五十音双布局），通过
- *   [PlatformTextInputInterceptor] 拦截并阻止系统输入法弹出；
- * - false：放行系统输入法。
+ * 应用内 IME 状态：罗马音引擎 + 布局/组合 UI 状态 + 按键处理。
+ * 由 [rememberRingLearnImeState] 创建并接管外部文本收养与光标离开组合区自动提交。
  *
- * 内置键盘与系统输入法共享同一个 [TextFieldState]，切换输入法不丢内容。
- *
- * IME 组合（composition）：
- * - 引擎持有 committed + 组合区（composed 假名 + 待转换罗马音），字段实时镜像；
- * - 组合区通过公开的 [OutputTransformation] + [TextFieldBuffer.addStyle] 绘制下划线
- *   （Compose 未公开 setComposition，组合状态由引擎维护、由本组件向外部同步）；
- * - 组合期间不触发外部查询（由调用方按 [onCompositionChange] 门控）；
- * - 光标移出组合区 / 切换到系统输入法 / 确定 / 选中候选 → 自动提交组合。
+ * 设计要点：字段（[RingLearnImeField]）与键盘（[RomajiKeyboard]）解耦，
+ * 屏幕可把候选条与键盘停靠在底部（类真实 IME），字段置于顶部，中间留给结果区。
  */
-@Composable
-fun RingLearnTextField(
-    state: TextFieldState,
-    useInAppKeyboard: Boolean,
-    haptic: HapticManager,
-    onSwitchToSystemIme: () -> Unit,
-    onCompositionChange: (composing: Boolean, kana: String) -> Unit = { _, _ -> },
-    imeDictionaryCandidates: List<WordEntity> = emptyList(),
-    modifier: Modifier = Modifier,
-    placeholder: String = "",
-    leadingIcon: (@Composable () -> Unit)? = null,
-    trailingIcon: (@Composable () -> Unit)? = null,
-    onSwitchToInAppKeyboard: (() -> Unit)? = null,
-    onCommit: () -> Unit = {}
+@Stable
+class RingLearnImeState internal constructor(
+    internal val state: TextFieldState,
+    internal val engine: RomajiEngine,
+    internal val blockingInterceptor: PlatformTextInputInterceptor,
+    private val onSwitchToSystemIme: () -> Unit,
+    private val onCompositionChange: (composing: Boolean, kana: String) -> Unit,
+    private val onCommit: () -> Unit
 ) {
-    val engine = remember { RomajiEngine() }
-    // 拦截器实例必须保持稳定：切到系统输入法时不安装即可放行
-    val blockingInterceptor = remember {
-        PlatformTextInputInterceptor { _, _ -> awaitCancellation() }
-    }
+    var keyboardLayout by mutableStateOf(KeyboardLayout.QWERTY)
+        internal set
+    var kanaMode by mutableStateOf(engine.mode)
+        internal set
+    var composing by mutableStateOf(false)
+        internal set
+    var compositionKana by mutableStateOf("")
+        internal set
 
-    var keyboardLayout by remember { mutableStateOf(KeyboardLayout.QWERTY) }
-    var kanaMode by remember { mutableStateOf(engine.mode) }
-    var composing by remember { mutableStateOf(false) }
-    var compositionKana by remember { mutableStateOf("") }
-    // 组合区 [start, end)，供 OutputTransformation 绘制下划线
-    val compositionRange = remember { mutableStateOf<IntRange?>(null) }
+    /** 组合区 [start, end)，供 OutputTransformation 绘制下划线 */
+    internal var compositionRange by mutableStateOf<IntRange?>(null)
 
     /** 把引擎状态镜像到字段（组合区下划线 + 光标）并同步外部状态。 */
-    fun syncFromEngine() {
+    internal fun syncFromEngine() {
         val full = engine.fullText
-        val range = if (engine.isComposing) engine.compositionStart until engine.compositionEnd else null
-        compositionRange.value = range
+        compositionRange = if (engine.isComposing) engine.compositionStart until engine.compositionEnd else null
         composing = engine.isComposing
         compositionKana = engine.compositionKana
         kanaMode = engine.mode
@@ -107,35 +93,16 @@ fun RingLearnTextField(
     }
 
     /** 外部文本变化（清空、手写追加、系统输入法输入）→ 引擎收养，丢弃组合避免漂移。 */
-    LaunchedEffect(state) {
-        snapshotFlow { state.text.toString() }
-            .distinctUntilChanged()
-            .collect { text ->
-                if (text != engine.fullText) {
-                    engine.adoptText(text)
-                    composing = false
-                    compositionKana = ""
-                    compositionRange.value = null
-                    onCompositionChange(false, "")
-                }
-            }
+    internal fun adoptExternalText(text: String) {
+        engine.adoptText(text)
+        composing = false
+        compositionKana = ""
+        compositionRange = null
+        onCompositionChange(false, "")
     }
 
-    // 光标离开组合区 → 自动提交组合（对齐真实 IME）
-    LaunchedEffect(state) {
-        snapshotFlow { state.selection to compositionRange.value }
-            .collect { (sel, range) ->
-                if (range != null && engine.isComposing) {
-                    val selEnd = max(sel.start, sel.end)
-                    if (selEnd < range.last) {
-                        engine.commit()
-                        syncFromEngine()
-                    }
-                }
-            }
-    }
-
-    val handleKey: (KeyboardKey) -> Unit = { key ->
+    /** 按键处理：字母 / 假名 / 退格 / 转换 / 平片切换 / 布局 / 系统输入法 / 确定。 */
+    fun handleKey(key: KeyboardKey) {
         when (key) {
             is KeyboardKey.Letter -> engine.input(key.char)
             is KeyboardKey.Kana -> engine.inputKana(key.kana)
@@ -158,104 +125,208 @@ fun RingLearnTextField(
         syncFromEngine()
     }
 
+    /** 选中候选：以 [text] 替换组合区并提交。 */
+    fun commitCandidate(text: String) {
+        engine.commitCandidate(text)
+        syncFromEngine()
+    }
+}
+
+/** 创建并接管 [RingLearnImeState] 的生命周期（外部文本收养 + 光标离开组合区自动提交）。 */
+@Composable
+fun rememberRingLearnImeState(
+    state: TextFieldState,
+    onSwitchToSystemIme: () -> Unit,
+    onCompositionChange: (composing: Boolean, kana: String) -> Unit = { _, _ -> },
+    onCommit: () -> Unit = {}
+): RingLearnImeState {
+    val currentSwitchToSystemIme by rememberUpdatedState(onSwitchToSystemIme)
+    val currentCompositionChange by rememberUpdatedState(onCompositionChange)
+    val currentCommit by rememberUpdatedState(onCommit)
+    val ime = remember {
+        RingLearnImeState(
+            state = state,
+            engine = RomajiEngine(),
+            blockingInterceptor = PlatformTextInputInterceptor { _, _ -> awaitCancellation() },
+            onSwitchToSystemIme = { currentSwitchToSystemIme() },
+            onCompositionChange = { composing, kana -> currentCompositionChange(composing, kana) },
+            onCommit = { currentCommit() }
+        )
+    }
+    // 外部文本变化（清空、手写追加、系统输入法输入）→ 引擎收养
+    LaunchedEffect(state) {
+        snapshotFlow { state.text.toString() }
+            .distinctUntilChanged()
+            .collect { text ->
+                if (text != ime.engine.fullText) ime.adoptExternalText(text)
+            }
+    }
+    // 光标移出组合区 → 自动提交组合（对齐真实 IME）
+    LaunchedEffect(state) {
+        snapshotFlow { state.selection to ime.compositionRange }
+            .collect { (sel, range) ->
+                if (range != null && ime.engine.isComposing) {
+                    val selEnd = max(sel.start, sel.end)
+                    if (selEnd < range.last) {
+                        ime.engine.commit()
+                        ime.syncFromEngine()
+                    }
+                }
+            }
+    }
+    return ime
+}
+
+/** 输入框外壳（不含键盘）：字段 + 前后图标 + 系统输入法切换图标。 */
+@Composable
+fun RingLearnImeField(
+    ime: RingLearnImeState,
+    useInAppKeyboard: Boolean,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    leadingIcon: (@Composable () -> Unit)? = null,
+    trailingIcon: (@Composable () -> Unit)? = null,
+    onSwitchToInAppKeyboard: (() -> Unit)? = null
+) {
     // 组合区下划线（公开 API：OutputTransformation + addStyle，lambda 接收者为 TextFieldBuffer）
-    // 组合区样式：跟随主题主色的下划线（对齐 Google 日语输入法组合下划线）
     val compositionStyle = SpanStyle(
         color = MaterialTheme.colorScheme.primary,
         textDecoration = TextDecoration.Underline
     )
-
     val outputTransformation = OutputTransformation {
-        val range = compositionRange.value
+        val range = ime.compositionRange
         if (range != null && range.last <= length) {
             addStyle(compositionStyle, range.first, range.last)
         }
     }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .padding(horizontal = 14.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        leadingIcon?.let {
+            Box(Modifier.padding(end = 10.dp)) { it() }
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            if (ime.state.text.isEmpty() && placeholder.isNotEmpty()) {
+                Text(
+                    text = placeholder,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+            val textField: @Composable () -> Unit = {
+                BasicTextField(
+                    state = ime.state,
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    outputTransformation = outputTransformation
+                )
+            }
+            if (useInAppKeyboard) {
+                InterceptPlatformTextInput(ime.blockingInterceptor) { textField() }
+            } else {
+                textField()
+            }
+        }
+        trailingIcon?.let {
+            Box(Modifier.padding(start = 10.dp)) { it() }
+        }
+        if (!useInAppKeyboard && onSwitchToInAppKeyboard != null) {
+            IconButton(onClick = onSwitchToInAppKeyboard) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_keyboard),
+                    contentDescription = "切回内置键盘",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
 
-    // 候选列表：假名本身 + 片假名 + 词库候选
-    val candidateList = remember(compositionKana, imeDictionaryCandidates) {
-        if (compositionKana.isBlank()) emptyList()
+/** 转换候选条：假名本身 + 片假名 + 词库候选；与键盘一起停靠在屏幕底部。 */
+@Composable
+fun RingLearnImeCandidateBar(
+    ime: RingLearnImeState,
+    imeDictionaryCandidates: List<WordEntity>,
+    haptic: HapticManager,
+    modifier: Modifier = Modifier
+) {
+    val candidateList = remember(ime.compositionKana, imeDictionaryCandidates) {
+        val kana = ime.compositionKana
+        if (kana.isBlank()) emptyList()
         else buildList {
-            add(ImeCandidate(text = compositionKana))
-            val kata = RomajiEngine.toKatakana(compositionKana)
-            if (kata != compositionKana) add(ImeCandidate(text = kata, kana = compositionKana))
+            add(ImeCandidate(text = kana))
+            val kata = RomajiEngine.toKatakana(kana)
+            if (kata != kana) add(ImeCandidate(text = kata, kana = kana))
             imeDictionaryCandidates.take(6).forEach { w ->
                 add(ImeCandidate(text = w.word, kana = w.kana))
             }
         }.take(8)
     }
+    CandidateBar(
+        candidates = if (ime.composing) candidateList else emptyList(),
+        haptic = haptic,
+        onSelect = { ime.commitCandidate(it.text) },
+        modifier = modifier
+    )
+}
 
+/**
+ * 统一的“应用内输入框”（兼容入口）：字段 + 候选条 + 键盘按顺序纵向排列。
+ * 需要把键盘停靠在屏幕底部时，请改用 [RingLearnImeField] + [RingLearnImeCandidateBar] + [RomajiKeyboard]。
+ */
+@Composable
+fun RingLearnTextField(
+    state: TextFieldState,
+    useInAppKeyboard: Boolean,
+    haptic: HapticManager,
+    onSwitchToSystemIme: () -> Unit,
+    onCompositionChange: (composing: Boolean, kana: String) -> Unit = { _, _ -> },
+    imeDictionaryCandidates: List<WordEntity> = emptyList(),
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    leadingIcon: (@Composable () -> Unit)? = null,
+    trailingIcon: (@Composable () -> Unit)? = null,
+    onSwitchToInAppKeyboard: (() -> Unit)? = null,
+    onCommit: () -> Unit = {}
+) {
+    val ime = rememberRingLearnImeState(
+        state = state,
+        onSwitchToSystemIme = onSwitchToSystemIme,
+        onCompositionChange = onCompositionChange,
+        onCommit = onCommit
+    )
     Column(modifier = modifier) {
-        // 输入框外壳
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = RoundedCornerShape(16.dp)
-                )
-                .padding(horizontal = 14.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            leadingIcon?.let {
-                Box(Modifier.padding(end = 10.dp)) { it() }
-            }
-            Box(modifier = Modifier.weight(1f)) {
-                if (state.text.isEmpty() && placeholder.isNotEmpty()) {
-                    Text(
-                        text = placeholder,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-                val textField: @Composable () -> Unit = {
-                    BasicTextField(
-                        state = state,
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        outputTransformation = outputTransformation
-                    )
-                }
-                if (useInAppKeyboard) {
-                    InterceptPlatformTextInput(blockingInterceptor) { textField() }
-                } else {
-                    textField()
-                }
-            }
-            trailingIcon?.let {
-                Box(Modifier.padding(start = 10.dp)) { it() }
-            }
-            if (!useInAppKeyboard && onSwitchToInAppKeyboard != null) {
-                IconButton(onClick = onSwitchToInAppKeyboard) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_keyboard),
-                        contentDescription = "切回内置键盘",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-
+        RingLearnImeField(
+            ime = ime,
+            useInAppKeyboard = useInAppKeyboard,
+            placeholder = placeholder,
+            leadingIcon = leadingIcon,
+            trailingIcon = trailingIcon,
+            onSwitchToInAppKeyboard = onSwitchToInAppKeyboard
+        )
         if (useInAppKeyboard) {
-            // 候选条固定高度（占位），避免键盘随候选出现/消失而跳动
-            CandidateBar(
-                candidates = if (composing) candidateList else emptyList(),
-                haptic = haptic,
-                onSelect = { candidate ->
-                    engine.commitCandidate(candidate.text)
-                    syncFromEngine()
-                }
+            RingLearnImeCandidateBar(
+                ime = ime,
+                imeDictionaryCandidates = imeDictionaryCandidates,
+                haptic = haptic
             )
             RomajiKeyboard(
-                layout = keyboardLayout,
-                kanaMode = kanaMode,
+                layout = ime.keyboardLayout,
+                kanaMode = ime.kanaMode,
                 haptic = haptic,
-                onKey = handleKey
+                onKey = ime::handleKey
             )
         }
     }
@@ -270,4 +341,3 @@ private fun TextFieldBuffer.moveCursorTo(pos: Int) {
         else -> placeCursorBeforeCharAt(pos)
     }
 }
-
