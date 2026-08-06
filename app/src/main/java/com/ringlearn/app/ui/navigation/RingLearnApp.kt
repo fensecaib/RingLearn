@@ -1,6 +1,9 @@
 package com.ringlearn.app.ui.navigation
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -8,7 +11,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.navigation3.runtime.NavKey
@@ -42,7 +48,15 @@ private val bottomDestinations = listOf(
     BottomDestination(QuizKey, "测验", R.drawable.ic_quiz)
 )
 
-/** 应用根：底部导航 + Navigation 3 (NavDisplay)。 */
+/**
+ * 应用根：底部导航 + Navigation 3 (NavDisplay)。
+ *
+ * 输入面可见性策略：系统 IME（[WindowInsets.isImeVisible]）或内置键盘
+ * （由查词/生词本页通过 [LookupScreen]/[WordBookScreen] 的 onInAppImeVisibilityChange 上报）
+ * 任一可见时**完全不组合** NavigationBar，让键盘真正停靠在屏幕底部（类真实 IME），
+ * 避免键盘上方残留 dock 栏空白；键盘收起或离开页面后 dock 自动恢复。
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RingLearnApp() {
     val navigationState = rememberNavigationState(
@@ -50,6 +64,11 @@ fun RingLearnApp() {
         topLevelRoutes = setOf(HomeKey, StudyKey, WordBookKey, QuizKey, LookupKey)
     )
     val navigator = remember { Navigator(navigationState) }
+
+    val systemImeVisible = WindowInsets.isImeVisible
+    var inAppImeVisible by remember { mutableStateOf(false) }
+    val reportInAppIme: (Boolean) -> Unit = { visible -> inAppImeVisible = visible }
+    val bottomBarVisible = !systemImeVisible && !inAppImeVisible
 
     val entryProvider = entryProvider {
         entry<HomeKey> {
@@ -64,33 +83,35 @@ fun RingLearnApp() {
             StudyScreen(onExit = { navigator.goBack() })
         }
         entry<WordBookKey> {
-            WordBookScreen()
+            WordBookScreen(onInAppImeVisibilityChange = reportInAppIme)
         }
         entry<QuizKey> {
             QuizScreen(onExit = { navigator.goBack() })
         }
         entry<LookupKey> {
-            LookupScreen()
+            LookupScreen(onInAppImeVisibilityChange = reportInAppIme)
         }
     }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            NavigationBar {
-                bottomDestinations.forEach { destination ->
-                    val selected = destination.key == navigationState.topLevelRoute
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { navigator.navigate(destination.key) },
-                        icon = {
-                            Icon(
-                                painter = painterResource(destination.iconRes),
-                                contentDescription = destination.label
-                            )
-                        },
-                        label = { Text(destination.label) }
-                    )
+            if (bottomBarVisible) {
+                NavigationBar {
+                    bottomDestinations.forEach { destination ->
+                        val selected = destination.key == navigationState.topLevelRoute
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { navigator.navigate(destination.key) },
+                            icon = {
+                                Icon(
+                                    painter = painterResource(destination.iconRes),
+                                    contentDescription = destination.label
+                                )
+                            },
+                            label = { Text(destination.label) }
+                        )
+                    }
                 }
             }
         }

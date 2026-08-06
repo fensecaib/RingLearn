@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,7 +28,9 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,7 +57,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WordBookScreen(
-    viewModel: WordBookViewModel = hiltViewModel()
+    viewModel: WordBookViewModel = hiltViewModel(),
+    onInAppImeVisibilityChange: (Boolean) -> Unit = {}
 ) {
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
@@ -87,6 +91,13 @@ fun WordBookScreen(
         }
     }
 
+    // 输入面可见性上报：内置键盘停靠时通知根组件隐藏底部导航栏（dock）。
+    val inAppImeShown = useInAppKeyboard
+    SideEffect { onInAppImeVisibilityChange(inAppImeShown) }
+    DisposableEffect(Unit) {
+        onDispose { onInAppImeVisibilityChange(false) }
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0),
@@ -104,6 +115,7 @@ fun WordBookScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
                 .padding(padding)
         ) {
             RingLearnImeField(

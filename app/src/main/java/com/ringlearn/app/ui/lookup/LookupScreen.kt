@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,7 +40,9 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -79,7 +82,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LookupScreen(
-    viewModel: LookupViewModel = hiltViewModel()
+    viewModel: LookupViewModel = hiltViewModel(),
+    onInAppImeVisibilityChange: (Boolean) -> Unit = {}
 ) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
@@ -118,6 +122,13 @@ fun LookupScreen(
         }
     }
 
+    // 输入面可见性上报：内置键盘停靠时通知根组件隐藏底部导航栏（dock）。
+    val inAppImeShown = useInAppKeyboard && inputMode == LookupInputMode.KEYBOARD
+    SideEffect { onInAppImeVisibilityChange(inAppImeShown) }
+    DisposableEffect(Unit) {
+        onDispose { onInAppImeVisibilityChange(false) }
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0),
@@ -132,6 +143,7 @@ fun LookupScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
                 .padding(padding)
         ) {
             // 输入方式切换：键盘 / 手写
