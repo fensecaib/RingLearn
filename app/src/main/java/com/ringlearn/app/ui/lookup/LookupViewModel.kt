@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -65,6 +66,23 @@ class LookupViewModel @Inject constructor(
     /** 识别触发信号（去抖后执行） */
     private val strokeEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
+    /** 内置键盘是否处于组合状态（组合期间不触发主查询） */
+    private val _imeComposing = MutableStateFlow(false)
+    val imeComposing: StateFlow<Boolean> = _imeComposing.asStateFlow()
+
+    /** 内置键盘组合中的纯假名（用于 IME 词典候选） */
+    private val _compositionKana = MutableStateFlow("")
+    val compositionKana: StateFlow<String> = _compositionKana.asStateFlow()
+
+    /** IME 词典候选：组合假名前缀匹配词库（去抖 120ms，组合期间不触发主查询） */
+    val imeDictionaryCandidates: StateFlow<List<WordEntity>> = _compositionKana
+        .debounce(120)
+        .distinctUntilChanged()
+        .flatMapLatest { kana ->
+            if (kana.isBlank()) flowOf(emptyList())
+            else flowOf(wordRepository.searchCandidates(kana))
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     /** 搜索结果：输入去抖 300ms 后实时查询 Room（LIKE，已转义）；空查询不查库 */
     val results: StateFlow<List<WordEntity>> = _query
         .debounce(300)
@@ -94,6 +112,20 @@ class LookupViewModel @Inject constructor(
 
     fun onQueryChange(value: String) {
         _query.value = value
+    }
+
+    /**
+     * 字段内容变化（内置键盘 / 系统输入法共用）：
+     * 组合进行中不更新查询（避免搜索到不完整假名），仅组合提交后才触发搜索。
+     */
+    fun onFieldChanged(text: String, composing: Boolean) {
+        if (!composing) _query.value = text
+    }
+
+    /** 内置键盘组合状态变化（候选条数据源 + 查询门控） */
+    fun onCompositionChange(composing: Boolean, kana: String) {
+        _imeComposing.value = composing
+        _compositionKana.value = kana
     }
 
     fun onModeChange(mode: LookupInputMode) {
@@ -142,3 +174,5 @@ class LookupViewModel @Inject constructor(
         }
     }
 }
+
+

@@ -56,19 +56,30 @@ fun WordBookScreen(
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val useInAppKeyboard by viewModel.useInAppKeyboard.collectAsStateWithLifecycle()
+    val imeComposing by viewModel.imeComposing.collectAsStateWithLifecycle()
+    val imeDictionaryCandidates by viewModel.imeDictionaryCandidates.collectAsStateWithLifecycle()
     val haptic = rememberHapticManager()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     // 输入框状态：与 ViewModel 双向同步
     val textFieldState = remember { TextFieldState() }
-    LaunchedEffect(textFieldState) {
-        snapshotFlow { textFieldState.text.toString() }
+    // IME 组合期间不触发搜索：内置键盘组合由引擎回调门控，系统输入法组合读取 state.composition
+    LaunchedEffect(textFieldState, useInAppKeyboard) {
+        snapshotFlow {
+            val systemComposing = textFieldState.composition?.takeIf { !it.collapsed } != null
+            Triple(textFieldState.text.toString(), systemComposing, imeComposing)
+        }
             .distinctUntilChanged()
-            .collect { viewModel.onQueryChange(it) }
+            .collect { (text, systemComposing, imeComposing) ->
+                val composing = if (useInAppKeyboard) imeComposing else systemComposing
+                viewModel.onFieldChanged(text, composing)
+            }
     }
+    // 外部查询变化（清空 / 恢复）→ 同步字段；组合进行中不覆盖
     LaunchedEffect(query) {
-        if (textFieldState.text.toString() != query) {
+        val composition = textFieldState.composition
+        if ((composition == null || composition.collapsed) && textFieldState.text.toString() != query) {
             textFieldState.edit { replace(0, length, query) }
         }
     }
@@ -92,6 +103,8 @@ fun WordBookScreen(
                 haptic = haptic,
                 onSwitchToSystemIme = viewModel::onSwitchToSystemIme,
                 onSwitchToInAppKeyboard = viewModel::onSwitchToInAppKeyboard,
+                onCompositionChange = viewModel::onCompositionChange,
+                imeDictionaryCandidates = imeDictionaryCandidates,
                 onCommit = {},
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 placeholder = "搜索单词 / 假名 / 释义",

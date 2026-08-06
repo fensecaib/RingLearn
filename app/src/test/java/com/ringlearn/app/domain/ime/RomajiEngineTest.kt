@@ -1,157 +1,185 @@
 package com.ringlearn.app.domain.ime
 
-import com.ringlearn.app.domain.ime.RomajiEngine.Mode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * RomajiEngine v2 测试：IME 组合状态机（committed + composed + buffer）。
+ */
 class RomajiEngineTest {
 
-    private fun type(engine: RomajiEngine, text: String): String = buildString {
-        text.forEach { append(engine.input(it)) }
-    }
-
-    /** 每次转换使用全新引擎，避免 pending 缓冲跨用例残留 */
-    private fun convert(text: String, mode: Mode = Mode.HIRAGANA): String =
-        type(RomajiEngine(mode), text)
-
     @Test
-    fun `basic vowels`() {
-        assertEquals("あいうえお", convert("aiueo"))
+    fun `basic syllables convert to composition kana`() {
+        val e = RomajiEngine()
+        e.input('k'); e.input('a')
+        assertEquals("か", e.compositionKana)
+        assertEquals("か", e.fullText)
+        assertTrue(e.isComposing)
     }
 
     @Test
-    fun `k row`() {
-        assertEquals("かきくけこ", convert("kakikukeko"))
-    }
-
-    @Test
-    fun `shi and s row`() {
-        assertEquals("し", convert("shi"))
-        assertEquals("さすせそ", convert("sasuseso"))
-    }
-
-    @Test
-    fun `chi and tsu`() {
-        assertEquals("ち", convert("chi"))
-        assertEquals("つ", convert("tsu"))
-        assertEquals("たてと", convert("tateto"))
-    }
-
-    @Test
-    fun `dakuten`() {
-        assertEquals("がぎぐげご", convert("gagigugego"))
-        assertEquals("ざじずぜぞ", convert("zajizuzezo"))
-        assertEquals("だ", convert("da"))
-        assertEquals("ばびぶべぼ", convert("babibubebo"))
-    }
-
-    @Test
-    fun `handakuten`() {
-        assertEquals("ぱぴぷぺぽ", convert("papipupepo"))
-    }
-
-    @Test
-    fun `youon`() {
-        assertEquals("きゃきゅきょ", convert("kyakyukyo"))
-        assertEquals("しゃしゅしょ", convert("shashusho"))
-        assertEquals("ちゃちゅちょ", convert("chachucho"))
-        assertEquals("にゃにゅにょ", convert("nyanyunyo"))
-        assertEquals("ぎゃぎゅぎょ", convert("gyagyugyo"))
-        assertEquals("じゃじゅじょ", convert("jajujo"))
-        assertEquals("ぴゃぴゅぴょ", convert("pyapyupyo"))
+    fun `youon kyo converts correctly`() {
+        val e = RomajiEngine()
+        "kyou".forEach { e.input(it) }
+        assertEquals("きょう", e.compositionKana)
     }
 
     @Test
     fun `sokuon double consonant`() {
-        assertEquals("っ", convert("kk"))
-        assertEquals("っか", convert("kka"))
-        assertEquals("がっこう", convert("gakkou"))
-        assertEquals("ざっし", convert("zasshi"))
-        assertEquals("きって", convert("kitte"))
-        assertEquals("いっぱい", convert("ippai"))
+        val e = RomajiEngine()
+        "kka".forEach { e.input(it) }
+        assertEquals("っか", e.compositionKana)
     }
 
     @Test
-    fun `long vowel o plus u`() {
-        assertEquals("こう", convert("kou"))
-        assertEquals("おう", convert("ou"))
-        assertEquals("せんせい", convert("sensei"))
+    fun `hatsuon nn and n plus consonant`() {
+        val e = RomajiEngine()
+        "minna".forEach { e.input(it) }
+        assertEquals("みんな", e.compositionKana)
     }
 
     @Test
-    fun `n handling`() {
-        val engine = RomajiEngine()
-        // n 单独输入保持 pending，flush 后为 ん
-        type(engine, "hon")
-        assertEquals("ほん", "ほ" + engine.flush())
-        assertEquals("みんな", convert("minna"))
-        assertEquals("ん", convert("nn"))
-        assertEquals("んな", convert("nna"))
-        assertEquals("かんい", convert("kan'i"))
-        // n + 辅音 -> ん + 后续音节
-        assertEquals("んか", convert("nka"))
-        val e2 = RomajiEngine()
-        assertEquals("こんばん", type(e2, "konban") + e2.flush())
-        assertEquals("きんようび", convert("kin'youbi"))
+    fun `long vowel ou`() {
+        val e = RomajiEngine()
+        "gakkou".forEach { e.input(it) }
+        assertEquals("がっこう", e.compositionKana)
     }
 
     @Test
-    fun `katakana mode`() {
-        assertEquals("カキクケコ", convert("kakikukeko", Mode.KATAKANA))
-        assertEquals("ッ", convert("kk", Mode.KATAKANA))
-        assertEquals("キャ", convert("kya", Mode.KATAKANA))
-        assertEquals("シャ", convert("sha", Mode.KATAKANA))
-        val e = RomajiEngine(Mode.KATAKANA); type(e, "n"); assertEquals("ン", e.flush())
+    fun `apostrophe separates n from vowel`() {
+        val e = RomajiEngine()
+        "kan'i".forEach { e.input(it) }
+        assertEquals("かんい", e.compositionKana)
     }
 
     @Test
-    fun `small kana`() {
-        assertEquals("ぁ", convert("la"))
-        assertEquals("ゃ", convert("xya"))
-        assertEquals("っ", convert("ltu"))
-        assertEquals("ぃ", convert("xi"))
+    fun `katakana mode converts composition`() {
+        val e = RomajiEngine()
+        "kyou".forEach { e.input(it) }
+        e.toggleMode()
+        assertEquals(RomajiEngine.Mode.KATAKANA, e.mode)
+        assertEquals("キョウ", e.compositionKana)
+        e.toggleMode()
+        assertEquals("きょう", e.compositionKana)
     }
 
     @Test
-    fun `non romaji characters pass through`() {
-        assertEquals("あ1", convert("a1"))
-        assertEquals("漢字", convert("漢字"))
+    fun `commit moves composition to committed`() {
+        val e = RomajiEngine()
+        "kyou".forEach { e.input(it) }
+        val committed = e.commit()
+        assertEquals("きょう", committed)
+        assertEquals("きょう", e.fullText)
+        assertFalse(e.isComposing)
+        // 继续输入追加到新组合
+        e.input('n'); e.input('i')
+        assertEquals("きょうに", e.fullText)
     }
 
     @Test
-    fun `flush commits pending as romaji except n`() {
-        val engine = RomajiEngine()
-        type(engine, "sh")
-        assertEquals("sh", engine.flush())
-        assertFalse(engine.hasPending)
+    fun `commitCandidate replaces kana with kanji`() {
+        val e = RomajiEngine()
+        "kyou".forEach { e.input(it) }
+        val committed = e.commitCandidate("今日")
+        assertEquals("今日", committed)
+        assertEquals("今日", e.fullText)
+        assertFalse(e.isComposing)
     }
 
     @Test
-    fun `backspace pops pending first`() {
-        val engine = RomajiEngine()
-        type(engine, "k")
-        assertTrue(engine.hasPending)
-        assertTrue(engine.backspace())
-        assertFalse(engine.hasPending)
+    fun `space flushes pending romaji but keeps composing`() {
+        val e = RomajiEngine()
+        e.input('k'); e.input('y'); e.input('o')
+        e.input('n')
+        assertEquals("きょ", e.compositionKana)
+        assertTrue(e.isComposing)
+        e.space()
+        assertEquals("きょん", e.compositionKana)
+        assertTrue(e.isComposing)
     }
 
     @Test
-    fun `toggle mode`() {
-        val engine = RomajiEngine()
-        engine.toggleMode()
-        assertEquals("カ", type(engine, "ka"))
-        engine.toggleMode()
-        assertEquals("か", type(engine, "ka"))
+    fun `backspace precedence buffer then kana then committed`() {
+        val e = RomajiEngine()
+        "kyou".forEach { e.input(it) }
+        // 再输入一个未完成音节
+        e.input('s')
+        assertEquals("きょう", e.compositionKana)
+        assertEquals("s", e.pendingRomaji)
+        assertTrue(e.backspace()) // 先退缓冲
+        assertEquals("", e.pendingRomaji)
+        assertEquals("きょう", e.compositionKana)
+        assertTrue(e.backspace()) // 再退组合假名
+        assertEquals("きょ", e.compositionKana)
+        e.commit()
+        assertTrue(e.backspace()) // 再退已提交（きょ -> き）
+        assertEquals("き", e.fullText)
+        assertTrue(e.backspace()) // 移除最后一个已提交字符
+        assertEquals("", e.fullText)
+        assertFalse(e.backspace()) // 全部为空
     }
 
     @Test
-    fun `real words roundtrip`() {
-        assertEquals("にほんご", convert("nihongo"))
-        assertEquals("きょう", convert("kyou"))
-        assertEquals("しゅくだい", convert("shukudai"))
-        assertEquals("べんきょう", convert("benkyou"))
-        assertEquals("おおきい", convert("ookii"))
+    fun `inputKana appends directly to composition`() {
+        val e = RomajiEngine()
+        e.inputKana("きょう")
+        assertEquals("きょう", e.compositionKana)
+        e.inputKana("の")
+        assertEquals("きょうの", e.compositionKana)
+    }
+
+    @Test
+    fun `non letter commits composition and inserts literally`() {
+        val e = RomajiEngine()
+        "kyou".forEach { e.input(it) }
+        e.input('1')
+        assertEquals("きょう1", e.fullText)
+        assertFalse(e.isComposing)
+    }
+
+    @Test
+    fun `adoptText discards composition`() {
+        val e = RomajiEngine()
+        "kyou".forEach { e.input(it) }
+        e.adoptText("今日")
+        assertEquals("今日", e.fullText)
+        assertFalse(e.isComposing)
+    }
+
+    @Test
+    fun `katakana round trip`() {
+        assertEquals("キョウ", RomajiEngine.toKatakana("きょう"))
+        assertEquals("きょう", RomajiEngine.toHiragana("キョウ"))
+        assertEquals("ヴ", RomajiEngine.toKatakana("ゔ"))
+        assertEquals("ゔ", RomajiEngine.toHiragana("ヴ"))
+    }
+
+    @Test
+    fun `invalid letter q becomes literal without crash`() {
+        val e = RomajiEngine()
+        e.input('q')
+        assertEquals("q", e.compositionKana)
+        e.input('q')
+        assertEquals("qq", e.compositionKana)
+    }
+
+    @Test
+    fun `invalid romaji mixed with valid converts partially`() {
+        val e = RomajiEngine()
+        "kyoq".forEach { e.input(it) }
+        assertEquals("きょq", e.compositionKana)
+    }
+
+    @Test
+    fun `sokuon with kana grid`() {
+        val e = RomajiEngine()
+        e.inputKana("がっこう")
+        assertEquals("がっこう", e.compositionKana)
+        e.commit()
+        assertEquals("がっこう", e.fullText)
     }
 }
+
+

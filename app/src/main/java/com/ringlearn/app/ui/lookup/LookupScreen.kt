@@ -82,8 +82,10 @@ fun LookupScreen(
     val results by viewModel.results.collectAsStateWithLifecycle()
     val inputMode by viewModel.inputMode.collectAsStateWithLifecycle()
     val useInAppKeyboard by viewModel.useInAppKeyboard.collectAsStateWithLifecycle()
+    val imeComposing by viewModel.imeComposing.collectAsStateWithLifecycle()
     val strokes by viewModel.strokes.collectAsStateWithLifecycle()
     val candidates by viewModel.candidates.collectAsStateWithLifecycle()
+    val imeDictionaryCandidates by viewModel.imeDictionaryCandidates.collectAsStateWithLifecycle()
     val recognizerLoading by viewModel.recognizerLoading.collectAsStateWithLifecycle()
     val haptic = rememberHapticManager()
     val listState = rememberLazyListState()
@@ -91,10 +93,17 @@ fun LookupScreen(
 
     // 输入框状态：与 ViewModel 双向同步（内置键盘直接编辑 state）
     val textFieldState = remember { TextFieldState() }
-    LaunchedEffect(textFieldState) {
-        snapshotFlow { textFieldState.text.toString() }
+    // IME 组合期间不触发查询：内置键盘组合由引擎回调门控，系统输入法组合读取 state.composition
+    LaunchedEffect(textFieldState, useInAppKeyboard) {
+        snapshotFlow {
+            val systemComposing = textFieldState.composition?.takeIf { !it.collapsed } != null
+            Triple(textFieldState.text.toString(), systemComposing, imeComposing)
+        }
             .distinctUntilChanged()
-            .collect { viewModel.onQueryChange(it) }
+            .collect { (text, systemComposing, imeComposing) ->
+                val composing = if (useInAppKeyboard) imeComposing else systemComposing
+                viewModel.onFieldChanged(text, composing)
+            }
     }
     // 查询变化时回到列表顶部（避免 LazyColumn 锚定旧项导致首卡被顶出视口）
     LaunchedEffect(results) {
@@ -142,6 +151,8 @@ fun LookupScreen(
                         haptic = haptic,
                         onSwitchToSystemIme = viewModel::onSwitchToSystemIme,
                         onSwitchToInAppKeyboard = viewModel::onSwitchToInAppKeyboard,
+                        onCompositionChange = viewModel::onCompositionChange,
+                        imeDictionaryCandidates = imeDictionaryCandidates,
                         onCommit = {},
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         placeholder = "输入日文或中文释义",
@@ -157,7 +168,7 @@ fun LookupScreen(
                             if (query.isNotEmpty()) {
                                 IconButton(onClick = {
                                     haptic.click()
-                                    viewModel.onQueryChange("")
+                                    textFieldState.edit { replace(0, length, "") }
                                 }) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_close),
@@ -457,3 +468,5 @@ private fun WordLookupCard(
         }
     }
 }
+
+

@@ -60,6 +60,13 @@ interface WordDao {
     )
     fun observeLookup(q: String): Flow<List<WordEntity>>
 
+    /** IME 转换候选：按假名前缀匹配，优先完全匹配，再按 JLPT 等级与词库顺序（最多 20 条） */
+    @Query(
+        "SELECT * FROM words WHERE kana LIKE :kana || '%' ESCAPE '\\' " +
+            "ORDER BY CASE WHEN kana = :kana THEN 0 ELSE 1 END, jlpt ASC, id ASC LIMIT 20"
+    )
+    suspend fun getCandidatesByKana(kana: String): List<WordEntity>
+
     @Query("SELECT * FROM words")
     suspend fun getAllWords(): List<WordEntity>
 
@@ -80,6 +87,7 @@ interface WordDao {
     )
     suspend fun resetAllProgress()
 }
+
 
 
 

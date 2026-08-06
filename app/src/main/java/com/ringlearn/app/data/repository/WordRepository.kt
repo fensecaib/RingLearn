@@ -117,6 +117,9 @@ class WordRepository @Inject constructor(
     private fun String.escapeLike(): String =
         replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
+    /** IME 转换候选：按假名前缀匹配词库（kana 不含 LIKE 通配符，仍做转义兜底） */
+    suspend fun searchCandidates(kana: String): List<WordEntity> =
+        wordDao.getCandidatesByKana(kana.escapeLike())
     suspend fun setFavorite(wordId: Long, favorite: Boolean) {
         val word = wordDao.getWord(wordId) ?: return
         wordDao.update(word.copy(isFavorite = favorite))
@@ -190,5 +193,6 @@ class WordRepository @Inject constructor(
         const val DAY_MILLIS = 24 * 60 * 60 * 1000L
     }
 }
+
 
 
