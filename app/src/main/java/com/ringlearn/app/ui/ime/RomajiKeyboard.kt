@@ -86,6 +86,7 @@ fun RomajiKeyboard(
     kanaMode: RomajiEngine.Mode,
     haptic: HapticManager,
     onKey: (KeyboardKey) -> Unit,
+    composing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -95,24 +96,98 @@ fun RomajiKeyboard(
             .padding(horizontal = 6.dp, vertical = 8.dp)
     ) {
         when (layout) {
-            KeyboardLayout.QWERTY -> QwertyRows(haptic, onKey)
-            KeyboardLayout.KANA -> KanaGrid(kanaMode, haptic, onKey)
+            KeyboardLayout.QWERTY -> QwertyRows(kanaMode, composing, haptic, onKey)
+            KeyboardLayout.KANA -> {
+                KanaGrid(kanaMode, haptic, onKey)
+                Spacer(Modifier.height(6.dp))
+                FunctionBar(kanaMode = kanaMode, layout = layout, haptic = haptic, onKey = onKey)
+            }
         }
-        Spacer(Modifier.height(6.dp))
-        FunctionBar(kanaMode = kanaMode, layout = layout, haptic = haptic, onKey = onKey)
     }
 }
 
+/**
+ * iOS 风格 QWERTY 布局：
+ * - 第一排：q w e r t y u i o p
+ * - 第二排：a s d f g h j k l（左右缩进约半键，对齐 iOS）
+ * - 第三排：かな⇄カナ（类 ⇧）+ z x c v b n m + ⌫（类退格）
+ * - 底排：五十音⇄QWERTY（类 123）+ ⌨（类地球键）+ 空格/変換（空格键）+ 確定（类回车）
+ */
 @Composable
 private fun QwertyRows(
+    kanaMode: RomajiEngine.Mode,
+    composing: Boolean,
     haptic: HapticManager,
     onKey: (KeyboardKey) -> Unit
 ) {
     KeyboardRow(listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"), haptic, onKey)
     Spacer(Modifier.height(6.dp))
-    KeyboardRow(listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"), haptic, onKey)
+    KeyboardRow(
+        listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"),
+        haptic,
+        onKey,
+        modifier = Modifier.padding(horizontal = 14.dp)
+    )
     Spacer(Modifier.height(6.dp))
-    KeyboardRow(listOf("z", "x", "c", "v", "b", "n", "m"), haptic, onKey)
+    // 第三排：左 かな⇄カナ（类 ⇧），右 ⌫（类退格）
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        KeyboardKeyButton(
+            label = if (kanaMode == RomajiEngine.Mode.HIRAGANA) "かな" else "カナ",
+            haptic = haptic,
+            modifier = Modifier.weight(1.25f),
+            fontSize = 15,
+            onClick = { onKey(KeyboardKey.ToggleKanaMode) }
+        )
+        listOf("z", "x", "c", "v", "b", "n", "m").forEach { label ->
+            KeyboardKeyButton(
+                label = label,
+                haptic = haptic,
+                modifier = Modifier.weight(1f),
+                onClick = { onKey(KeyboardKey.Letter(label[0])) }
+            )
+        }
+        KeyboardKeyButton(
+            label = "⌫",
+            haptic = haptic,
+            modifier = Modifier.weight(1.25f),
+            onClick = { onKey(KeyboardKey.Backspace) }
+        )
+    }
+    Spacer(Modifier.height(6.dp))
+    // 底排：五十音（类 123）+ ⌨（类 地球）+ 空格/変換 + 確定（类 回车）
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        KeyboardKeyButton(
+            label = "五十音",
+            haptic = haptic,
+            modifier = Modifier.weight(1.4f),
+            fontSize = 14,
+            onClick = { onKey(KeyboardKey.ToggleLayout) }
+        )
+        KeyboardKeyButton(
+            label = "⌨",
+            haptic = haptic,
+            modifier = Modifier.weight(1f),
+            onClick = { onKey(KeyboardKey.SwitchToSystemIme) }
+        )
+        KeyboardKeyButton(
+            label = if (composing) "変換" else "空格",
+            haptic = haptic,
+            modifier = Modifier.weight(3.6f),
+            onClick = { onKey(KeyboardKey.Convert) }
+        )
+        KeyboardKeyButton(
+            label = "確定",
+            haptic = haptic,
+            modifier = Modifier.weight(1.4f),
+            onClick = { onKey(KeyboardKey.Commit) }
+        )
+    }
 }
 
 /** 五十音键盘：修饰模式行 + 5×10 假名网格 */
@@ -231,10 +306,11 @@ private fun FunctionBar(
 private fun KeyboardRow(
     labels: List<String>,
     haptic: HapticManager,
-    onKey: (KeyboardKey) -> Unit
+    onKey: (KeyboardKey) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         labels.forEach { label ->

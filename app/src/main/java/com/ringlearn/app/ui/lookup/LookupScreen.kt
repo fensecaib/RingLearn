@@ -253,6 +253,7 @@ fun LookupScreen(
                 RomajiKeyboard(
                     layout = ime.keyboardLayout,
                     kanaMode = ime.kanaMode,
+                    composing = ime.composing,
                     haptic = haptic,
                     onKey = ime::handleKey
                 )
