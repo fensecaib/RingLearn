@@ -47,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -122,8 +123,14 @@ fun LookupScreen(
         }
     }
 
+    // 内置键盘收起状态：可一键收起（键盘不再占用屏幕），点击字段/「显示键盘」恢复
+    var keyboardVisible by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(useInAppKeyboard, inputMode) {
+        if (useInAppKeyboard && inputMode == LookupInputMode.KEYBOARD) keyboardVisible = true
+    }
+
     // 输入面可见性上报：内置键盘停靠时通知根组件隐藏底部导航栏（dock）。
-    val inAppImeShown = useInAppKeyboard && inputMode == LookupInputMode.KEYBOARD
+    val inAppImeShown = useInAppKeyboard && inputMode == LookupInputMode.KEYBOARD && keyboardVisible
     SideEffect { onInAppImeVisibilityChange(inAppImeShown) }
     DisposableEffect(Unit) {
         onDispose { onInAppImeVisibilityChange(false) }
@@ -172,6 +179,11 @@ fun LookupScreen(
                         onSwitchToInAppKeyboard = viewModel::onSwitchToInAppKeyboard,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         placeholder = "输入日文或中文释义",
+                        keyboardVisible = keyboardVisible,
+                        onShowKeyboard = {
+                            haptic.click()
+                            keyboardVisible = true
+                        },
                         leadingIcon = {
                             Icon(
                                 painter = painterResource(R.drawable.ic_search),
@@ -181,7 +193,17 @@ fun LookupScreen(
                             )
                         },
                         trailingIcon = {
-                            if (query.isNotEmpty()) {
+                            if (!keyboardVisible) {
+                                IconButton(onClick = {
+                                    haptic.click()
+                                    keyboardVisible = true
+                                }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_keyboard),
+                                        contentDescription = "显示键盘"
+                                    )
+                                }
+                            } else if (query.isNotEmpty()) {
                                 IconButton(onClick = {
                                     haptic.click()
                                     textFieldState.edit { replace(0, length, "") }
@@ -228,7 +250,7 @@ fun LookupScreen(
                     else -> LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 12.dp)
                     ) {
                         items(results, key = { it.id }) { word ->
 
@@ -243,8 +265,8 @@ fun LookupScreen(
                 }
             }
 
-            // 键盘停靠底部（仅内置键盘 + 键盘输入模式）
-            if (useInAppKeyboard && inputMode == LookupInputMode.KEYBOARD) {
+            // 键盘停靠底部（仅内置键盘 + 键盘输入模式且未收起）
+            if (inAppImeShown) {
                 RingLearnImeCandidateBar(
                     ime = ime,
                     imeDictionaryCandidates = imeDictionaryCandidates,
@@ -255,7 +277,11 @@ fun LookupScreen(
                     kanaMode = ime.kanaMode,
                     composing = ime.composing,
                     haptic = haptic,
-                    onKey = ime::handleKey
+                    onKey = ime::handleKey,
+                    onCollapse = {
+                        haptic.click()
+                        keyboardVisible = false
+                    }
                 )
             }
         }

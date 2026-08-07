@@ -32,6 +32,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
@@ -91,8 +94,14 @@ fun WordBookScreen(
         }
     }
 
+    // 内置键盘收起状态：可一键收起（键盘不再占用屏幕），点击字段/「显示键盘」恢复
+    var keyboardVisible by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(useInAppKeyboard) {
+        if (useInAppKeyboard) keyboardVisible = true
+    }
+
     // 输入面可见性上报：内置键盘停靠时通知根组件隐藏底部导航栏（dock）。
-    val inAppImeShown = useInAppKeyboard
+    val inAppImeShown = useInAppKeyboard && keyboardVisible
     SideEffect { onInAppImeVisibilityChange(inAppImeShown) }
     DisposableEffect(Unit) {
         onDispose { onInAppImeVisibilityChange(false) }
@@ -124,6 +133,11 @@ fun WordBookScreen(
                 onSwitchToInAppKeyboard = viewModel::onSwitchToInAppKeyboard,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 placeholder = "搜索单词 / 假名 / 释义",
+                keyboardVisible = keyboardVisible,
+                onShowKeyboard = {
+                    haptic.click()
+                    keyboardVisible = true
+                },
                 leadingIcon = {
                     Icon(
                         painter = painterResource(R.drawable.ic_search),
@@ -133,7 +147,17 @@ fun WordBookScreen(
                     )
                 },
                 trailingIcon = {
-                    if (query.isNotEmpty()) {
+                    if (!keyboardVisible) {
+                        IconButton(onClick = {
+                            haptic.click()
+                            keyboardVisible = true
+                        }) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_keyboard),
+                                contentDescription = "显示键盘"
+                            )
+                        }
+                    } else if (query.isNotEmpty()) {
                         IconButton(onClick = {
                             haptic.click()
                             viewModel.onQueryChange("")
@@ -167,7 +191,7 @@ fun WordBookScreen(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 12.dp)
                     ) {
                         items(favorites, key = { it.id }) { word ->
                             FavoriteWordItem(
@@ -185,8 +209,8 @@ fun WordBookScreen(
                 }
             }
 
-            // 键盘停靠底部（仅内置键盘模式）
-            if (useInAppKeyboard) {
+            // 键盘停靠底部（仅内置键盘模式且未收起）
+            if (inAppImeShown) {
                 RingLearnImeCandidateBar(
                     ime = ime,
                     imeDictionaryCandidates = imeDictionaryCandidates,
@@ -197,7 +221,11 @@ fun WordBookScreen(
                     kanaMode = ime.kanaMode,
                     composing = ime.composing,
                     haptic = haptic,
-                    onKey = ime::handleKey
+                    onKey = ime::handleKey,
+                    onCollapse = {
+                        haptic.click()
+                        keyboardVisible = false
+                    }
                 )
             }
         }

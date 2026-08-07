@@ -9,6 +9,7 @@ import com.ringlearn.app.util.handwriting.HandwritingRecognizer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -59,8 +60,8 @@ class LookupViewModel @Inject constructor(
     private val _recognizer = MutableStateFlow<HandwritingRecognizer?>(null)
     val recognizer: StateFlow<HandwritingRecognizer?> = _recognizer.asStateFlow()
 
-    /** 识别器是否正在构建模板 */
-    private val _recognizerLoading = MutableStateFlow(true)
+    /** 识别器是否正在构建模板（懒加载：进入手写模式才开始构建） */
+    private val _recognizerLoading = MutableStateFlow(false)
     val recognizerLoading: StateFlow<Boolean> = _recognizerLoading.asStateFlow()
 
     /** 识别触发信号（去抖后执行） */
@@ -96,17 +97,31 @@ class LookupViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        // 懒构建手写识别器（词库规模 ~1000 词，模板构建 <500ms）
-        viewModelScope.launch {
-            val chars = wordRepository.getAllCharacters()
-            _recognizer.value = withContext(Dispatchers.Default) {
-                HandwritingRecognizer(chars)
-            }
-            _recognizerLoading.value = false
-        }
+        // 手写识别器懒构建：仅在首次进入手写模式时初始化（见 ensureRecognizerReady），
+        // 避免查词页首进时占用 CPU 与切页长帧竞争。
         // 停笔 250ms 后自动识别
         viewModelScope.launch {
             strokeEvents.debounce(250).collect { recognize() }
+        }
+    }
+
+    /** 手写识别器构建任务（单飞防重复） */
+    private var recognizerJob: Job? = null
+
+    /** 首次进入手写模式时懒构建识别器（幂等；已有实例或正在构建时直接返回） */
+    fun ensureRecognizerReady() {
+        if (_recognizer.value != null || recognizerJob?.isActive == true) return
+        recognizerJob = viewModelScope.launch {
+            _recognizerLoading.value = true
+            runCatching {
+                val chars = wordRepository.getAllCharacters()
+                withContext(Dispatchers.Default) { HandwritingRecognizer(chars) }
+            }.onSuccess { recognizer ->
+                _recognizer.value = recognizer
+                // 构建期间已有笔画：构建完成后立即补一次识别
+                if (_strokes.value.isNotEmpty()) recognize()
+            }
+            _recognizerLoading.value = false
         }
     }
 
@@ -130,6 +145,7 @@ class LookupViewModel @Inject constructor(
 
     fun onModeChange(mode: LookupInputMode) {
         _inputMode.value = mode
+        if (mode == LookupInputMode.HANDWRITING) ensureRecognizerReady()
     }
 
     fun onSwitchToSystemIme() {

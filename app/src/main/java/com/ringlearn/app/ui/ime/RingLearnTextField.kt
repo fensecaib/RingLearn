@@ -7,6 +7,7 @@ package com.ringlearn.app.ui.ime
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.InterceptPlatformTextInput
@@ -186,7 +188,9 @@ fun RingLearnImeField(
     placeholder: String = "",
     leadingIcon: (@Composable () -> Unit)? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
-    onSwitchToInAppKeyboard: (() -> Unit)? = null
+    onSwitchToInAppKeyboard: (() -> Unit)? = null,
+    keyboardVisible: Boolean = true,
+    onShowKeyboard: (() -> Unit)? = null
 ) {
     // 组合区下划线（公开 API：OutputTransformation + addStyle，lambda 接收者为 TextFieldBuffer）
     val compositionStyle = SpanStyle(
@@ -236,6 +240,15 @@ fun RingLearnImeField(
                 InterceptPlatformTextInput(ime.blockingInterceptor) { textField() }
             } else {
                 textField()
+            }
+            // 键盘收起态：点击字段本身重新展开内置键盘
+            if (useInAppKeyboard && !keyboardVisible && onShowKeyboard != null) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onShowKeyboard)
+                )
             }
         }
         trailingIcon?.let {

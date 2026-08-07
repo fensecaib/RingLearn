@@ -1,5 +1,9 @@
 package com.ringlearn.app.ui.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -67,29 +71,36 @@ fun RingLearnApp() {
 
     val systemImeVisible = WindowInsets.isImeVisible
     var inAppImeVisible by remember { mutableStateOf(false) }
-    val reportInAppIme: (Boolean) -> Unit = { visible -> inAppImeVisible = visible }
+    // 稳定回调身份：避免每次根重组创建新 lambda
+    val reportInAppIme: (Boolean) -> Unit = remember {
+        { visible -> inAppImeVisible = visible }
+    }
     val bottomBarVisible = !systemImeVisible && !inAppImeVisible
 
-    val entryProvider = entryProvider {
-        entry<HomeKey> {
-            HomeScreen(
-                onNavigateToStudy = { navigator.navigate(StudyKey) },
-                onNavigateToWordBook = { navigator.navigate(WordBookKey) },
-                onNavigateToQuiz = { navigator.navigate(QuizKey) },
-                onNavigateToLookup = { navigator.navigate(LookupKey) }
-            )
-        }
-        entry<StudyKey> {
-            StudyScreen(onExit = { navigator.goBack() })
-        }
-        entry<WordBookKey> {
-            WordBookScreen(onInAppImeVisibilityChange = reportInAppIme)
-        }
-        entry<QuizKey> {
-            QuizScreen(onExit = { navigator.goBack() })
-        }
-        entry<LookupKey> {
-            LookupScreen(onInAppImeVisibilityChange = reportInAppIme)
+    // 稳定 entryProvider 身份：Navigation 3 的 rememberDecoratedNavEntries 以它为 remember key，
+    // 若不稳定，键盘开关/Tab 切换等每次根重组都会重建全部 NavEntry，导致已组合页面整树重组合。
+    val entryProvider = remember {
+        entryProvider {
+            entry<HomeKey> {
+                HomeScreen(
+                    onNavigateToStudy = { navigator.navigate(StudyKey) },
+                    onNavigateToWordBook = { navigator.navigate(WordBookKey) },
+                    onNavigateToQuiz = { navigator.navigate(QuizKey) },
+                    onNavigateToLookup = { navigator.navigate(LookupKey) }
+                )
+            }
+            entry<StudyKey> {
+                StudyScreen(onExit = { navigator.goBack() })
+            }
+            entry<WordBookKey> {
+                WordBookScreen(onInAppImeVisibilityChange = reportInAppIme)
+            }
+            entry<QuizKey> {
+                QuizScreen(onExit = { navigator.goBack() })
+            }
+            entry<LookupKey> {
+                LookupScreen(onInAppImeVisibilityChange = reportInAppIme)
+            }
         }
     }
 
@@ -121,7 +132,8 @@ fun RingLearnApp() {
                 .fillMaxSize()
                 .padding(padding),
             entries = navigationState.toEntries(entryProvider),
-            onBack = { navigator.goBack() }
+            onBack = { navigator.goBack() },
+            transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(180)) }
         )
     }
 }

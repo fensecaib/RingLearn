@@ -1,5 +1,10 @@
 package com.ringlearn.app.ui.ime
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,15 +42,20 @@ fun CandidateBar(
     modifier: Modifier = Modifier,
     height: Dp = 46.dp
 ) {
-    // 固定高度（对齐 Gboard 建议条）：候选为空时保留占位，避免键盘布局跳动
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height)
-            .padding(horizontal = 12.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
+    // 仅在有候选（组合中）时渲染：空态完全收起，不再在键盘上方保留空白条
+    AnimatedVisibility(
+        visible = candidates.isNotEmpty(),
+        modifier = modifier,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically() + fadeOut()
     ) {
-        if (candidates.isNotEmpty()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(height)
+                .padding(horizontal = 12.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 text = "候选",
                 style = MaterialTheme.typography.labelSmall,

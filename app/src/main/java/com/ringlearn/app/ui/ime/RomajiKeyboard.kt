@@ -87,6 +87,7 @@ fun RomajiKeyboard(
     haptic: HapticManager,
     onKey: (KeyboardKey) -> Unit,
     composing: Boolean = false,
+    onCollapse: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -95,6 +96,10 @@ fun RomajiKeyboard(
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .padding(horizontal = 6.dp, vertical = 8.dp)
     ) {
+        if (onCollapse != null) {
+            KeyboardCollapseHeader(onCollapse = onCollapse, haptic = haptic)
+            Spacer(Modifier.height(4.dp))
+        }
         when (layout) {
             KeyboardLayout.QWERTY -> QwertyRows(kanaMode, composing, haptic, onKey)
             KeyboardLayout.KANA -> {
@@ -319,6 +324,38 @@ private fun KeyboardRow(
                 haptic = haptic,
                 modifier = Modifier.weight(1f),
                 onClick = { onKey(KeyboardKey.Letter(label[0])) }
+            )
+        }
+    }
+}
+
+/** 键盘收起入口：顶部右侧「⌄ 收起」按钮（始终可见，点击后隐藏整个内置键盘）。 */
+@Composable
+private fun KeyboardCollapseHeader(
+    onCollapse: () -> Unit,
+    haptic: HapticManager
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .height(26.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable {
+                    haptic.tick()
+                    onCollapse()
+                }
+                .padding(horizontal = 12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "⌄ 收起",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
