@@ -9,6 +9,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -34,7 +36,17 @@ fun KeepAliveNavHost(
     topLevelRoute: NavKey,
     initialRoute: NavKey
 ) {
-    var visitedRoutes by remember { mutableStateOf(setOf(initialRoute)) }
+    // visitedRoutes 可保存：旋转/进程重建后已访问 Tab 保持常驻，不再重新组合
+    val routeLookup = remember(entries) { entries.associate { it.first.toString() to it.first } }
+    val visitedSaver = remember(routeLookup) {
+        Saver<Set<NavKey>, ArrayList<String>>(
+            save = { set -> ArrayList(set.map { it.toString() }) },
+            restore = { names -> names.mapNotNull { routeLookup[it] }.toSet() }
+        )
+    }
+    var visitedRoutes by rememberSaveable(stateSaver = visitedSaver) {
+        mutableStateOf(setOf(initialRoute))
+    }
     LaunchedEffect(topLevelRoute) {
         if (topLevelRoute !in visitedRoutes) {
             visitedRoutes = visitedRoutes + topLevelRoute

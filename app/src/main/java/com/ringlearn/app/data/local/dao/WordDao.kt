@@ -14,11 +14,12 @@ interface WordDao {
     @Query("SELECT COUNT(*) FROM words")
     fun observeTotalCount(): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM words WHERE isLearnedToday = 1")
-    fun observeLearnedTodayCount(): Flow<Int>
+    /** 今日已学新词：首次学习时间（learnedAt）落在今日零点之后 */
+    @Query("SELECT COUNT(*) FROM words WHERE learnedAt >= :startOfToday")
+    fun observeLearnedTodayCount(startOfToday: Long): Flow<Int>
 
-    /** 待复习数量：已学过（reviewCount > 0）且已到期（dueAt <= now）且今日未学 */
-    @Query("SELECT COUNT(*) FROM words WHERE isLearnedToday = 0 AND reviewCount > 0 AND dueAt <= :now")
+    /** 待复习数量：已学过（reviewCount > 0）且已到期（dueAt <= now） */
+    @Query("SELECT COUNT(*) FROM words WHERE reviewCount > 0 AND dueAt <= :now")
     fun observeDueCount(now: Long): Flow<Int>
 
     /** 已掌握：至少复习过 1 次的单词数量 */
@@ -28,11 +29,11 @@ interface WordDao {
     @Query("SELECT COUNT(*) FROM words WHERE isFavorite = 1")
     fun observeFavoriteCount(): Flow<Int>
 
-    @Query("SELECT * FROM words WHERE isLearnedToday = 0 AND reviewCount > 0 AND dueAt <= :now ORDER BY dueAt ASC LIMIT :limit")
+    @Query("SELECT * FROM words WHERE reviewCount > 0 AND dueAt <= :now ORDER BY dueAt ASC LIMIT :limit")
     suspend fun getDueWords(limit: Int, now: Long): List<WordEntity>
 
-    /** 新词：从未学过 */
-    @Query("SELECT * FROM words WHERE isLearnedToday = 0 AND reviewCount = 0 ORDER BY id ASC LIMIT :limit")
+    /** 新词：从未复习过（reviewCount == 0） */
+    @Query("SELECT * FROM words WHERE reviewCount = 0 ORDER BY id ASC LIMIT :limit")
     suspend fun getNewWords(limit: Int): List<WordEntity>
 
     @Query("SELECT * FROM words WHERE id = :id")
@@ -56,7 +57,7 @@ interface WordDao {
             "WHEN word = :q THEN 0 " +
             "WHEN kana = :q THEN 1 " +
             "WHEN word LIKE :q || '%' ESCAPE '\\' THEN 2 " +
-            "ELSE 3 END, id ASC"
+            "ELSE 3 END, id ASC LIMIT 100"
     )
     fun observeLookup(q: String): Flow<List<WordEntity>>
 

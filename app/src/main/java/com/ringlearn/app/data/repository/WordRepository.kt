@@ -54,10 +54,14 @@ class WordRepository @Inject constructor(
 
     private val dueCount: Flow<Int> = nowTicker.flatMapLatest { wordDao.observeDueCount(it) }
 
+    /** 今日已学新词数：以 60s 粒度随 nowTicker 推进“今日零点”，跨天自动归零 */
+    private val learnedTodayCount: Flow<Int> =
+        nowTicker.flatMapLatest { wordDao.observeLearnedTodayCount(startOfDay(it)) }
+
     val homeStats: Flow<HomeStats> = combine(
         combine(
             wordDao.observeTotalCount(),
-            wordDao.observeLearnedTodayCount()
+            learnedTodayCount
         ) { total, learned -> total to learned },
         combine(
             dueCount,
@@ -178,20 +182,21 @@ class WordRepository @Inject constructor(
         return streak
     }
 
-    private fun startOfDay(epochMillis: Long): Long {
-        val cal = Calendar.getInstance().apply {
-            timeInMillis = epochMillis
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        return cal.timeInMillis
-    }
-
     private companion object {
         const val DAY_MILLIS = 24 * 60 * 60 * 1000L
     }
+}
+
+/** 当天零点（epoch millis，本地时区）。 */
+internal fun startOfDay(epochMillis: Long): Long {
+    val cal = Calendar.getInstance().apply {
+        timeInMillis = epochMillis
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return cal.timeInMillis
 }
 
 

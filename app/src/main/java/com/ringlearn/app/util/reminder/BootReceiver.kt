@@ -6,8 +6,10 @@ import android.content.Intent
 import com.ringlearn.app.data.repository.SettingsRepository
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 
 /** 开机后恢复学习提醒。 */
 @AndroidEntryPoint
@@ -18,9 +20,17 @@ class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
-        val settings = runBlocking { settingsRepository.settings.first() }
-        if (settings.reminderEnabled) {
-            reminderScheduler.schedule(settings.reminderHour, settings.reminderMinute)
+        // goAsync：避免主线程阻塞
+        val result = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val settings = settingsRepository.settings.first()
+                if (settings.reminderEnabled) {
+                    reminderScheduler.schedule(settings.reminderHour, settings.reminderMinute)
+                }
+            } finally {
+                result.finish()
+            }
         }
     }
 }

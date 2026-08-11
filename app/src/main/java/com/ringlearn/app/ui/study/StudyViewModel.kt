@@ -9,6 +9,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -53,6 +55,9 @@ class StudyViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(StudyUiState(isLoading = true))
     val uiState: StateFlow<StudyUiState> = _uiState.asStateFlow()
+
+    /** 串行化滑动落库：快速连滑时保证每个词只被记录一次、索引有序推进 */
+    private val swipeMutex = Mutex()
 
     init {
         viewModelScope.launch {
@@ -111,26 +116,30 @@ class StudyViewModel @Inject constructor(
     fun onSwipeToWordbook() = recordSwipe(quality = Sm2Quality.UNKNOWN, favorite = true)
 
     private fun recordSwipe(quality: Int, favorite: Boolean) {
-        val state = _uiState.value
-        val word = state.currentWord ?: return
         viewModelScope.launch {
-            runCatching { wordRepository.recordReview(word, quality, favorite) }
-                .onSuccess {
-                    val fresh = _uiState.value
-                    // 防重入：只有当被记录的单词仍是当前卡片时才推进
-                    if (fresh.words.getOrNull(fresh.currentIndex)?.id != word.id) return@onSuccess
-                    val correct = quality >= 3
-                    val next = fresh.copy(
-                        currentIndex = fresh.currentIndex + 1,
-                        correctCount = fresh.correctCount + if (correct) 1 else 0,
-                        wrongCount = fresh.wrongCount + if (correct) 0 else 1,
-                        favoriteCount = fresh.favoriteCount + if (favorite) 1 else 0
-                    )
-                    _uiState.value = next.copy(roundFinished = next.currentIndex >= next.words.size)
-                }
-                .onFailure { e ->
-                    _uiState.update { it.copy(error = e.message ?: "保存失败") }
-                }
+            // 在锁内读取当前卡片：快速连滑时第二个请求等待锁释放后读到新卡片，
+            // 杜绝对同一词重复 recordReview（reviewCount/日志双记）
+            swipeMutex.withLock {
+                val state = _uiState.value
+                val word = state.currentWord ?: return@withLock
+                runCatching { wordRepository.recordReview(word, quality, favorite) }
+                    .onSuccess {
+                        val fresh = _uiState.value
+                        // 防重入：只有当被记录的单词仍是当前卡片时才推进
+                        if (fresh.words.getOrNull(fresh.currentIndex)?.id != word.id) return@onSuccess
+                        val correct = quality >= 3
+                        val next = fresh.copy(
+                            currentIndex = fresh.currentIndex + 1,
+                            correctCount = fresh.correctCount + if (correct) 1 else 0,
+                            wrongCount = fresh.wrongCount + if (correct) 0 else 1,
+                            favoriteCount = fresh.favoriteCount + if (favorite) 1 else 0
+                        )
+                        _uiState.value = next.copy(roundFinished = next.currentIndex >= next.words.size)
+                    }
+                    .onFailure { e ->
+                        _uiState.update { it.copy(error = e.message ?: "保存失败") }
+                    }
+            }
         }
     }
 

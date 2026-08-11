@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import com.ringlearn.app.R
+import com.ringlearn.app.ui.LocalActiveRoute
 import com.ringlearn.app.ui.LocalActiveTabIsHome
 import com.ringlearn.app.ui.RootViewModel
 import com.ringlearn.app.ui.home.HomeScreen
@@ -130,7 +131,8 @@ fun RingLearnApp() {
 
     CompositionLocalProvider(
         LocalInAppImeController provides inAppImeController,
-        LocalActiveTabIsHome provides (navigationState.topLevelRoute == HomeKey)
+        LocalActiveTabIsHome provides (navigationState.topLevelRoute == HomeKey),
+        LocalActiveRoute provides navigationState.topLevelRoute
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),

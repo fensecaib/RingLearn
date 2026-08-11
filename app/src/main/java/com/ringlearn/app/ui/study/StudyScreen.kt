@@ -41,6 +41,8 @@ import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
 import com.ringlearn.app.ui.components.EmptyState
 import com.ringlearn.app.ui.components.LoadingState
+import com.ringlearn.app.ui.LocalActiveRoute
+import com.ringlearn.app.ui.navigation.StudyKey
 import com.ringlearn.app.ui.rememberHapticManager
 import com.ringlearn.app.ui.rememberTtsManager
 import com.ringlearn.app.util.TtsManager
@@ -70,11 +72,14 @@ fun StudyScreen(
         }
     }
 
-    // 实时计时器
+    // 实时计时器：仅在学习 Tab 处于激活态时更新，避免 keep-alive 下隐藏时每秒重组
+    val activeRoute = LocalActiveRoute.current
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(uiState.sessionStartAt, uiState.roundFinished) {
+    LaunchedEffect(uiState.sessionStartAt, uiState.roundFinished, activeRoute) {
         while (uiState.sessionStartAt > 0 && !uiState.roundFinished) {
-            elapsedSeconds = (System.currentTimeMillis() - uiState.sessionStartAt) / 1000
+            if (activeRoute == StudyKey) {
+                elapsedSeconds = (System.currentTimeMillis() - uiState.sessionStartAt) / 1000
+            }
             delay(1000)
         }
     }

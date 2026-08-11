@@ -17,8 +17,10 @@ import com.ringlearn.app.RingLearnApplication
 import com.ringlearn.app.data.repository.SettingsRepository
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 
 /** 接收闹钟广播：弹出学习提醒通知，并预约下一天。 */
 @AndroidEntryPoint
@@ -28,13 +30,21 @@ class ReminderReceiver : BroadcastReceiver() {
     @Inject lateinit var reminderScheduler: ReminderScheduler
 
     override fun onReceive(context: Context, intent: Intent) {
-        val settings = runBlocking { settingsRepository.settings.first() }
-        if (!settings.reminderEnabled) return
+        // goAsync：把耗时读取移到 IO 线程，避免阻塞 BroadcastReceiver 主线程（ANR 风险）
+        val result = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val settings = settingsRepository.settings.first()
+                if (!settings.reminderEnabled) return@launch
 
-        showNotification(context)
+                showNotification(context)
 
-        // 预约下一天的提醒
-        reminderScheduler.schedule(settings.reminderHour, settings.reminderMinute)
+                // 预约下一天的提醒
+                reminderScheduler.schedule(settings.reminderHour, settings.reminderMinute)
+            } finally {
+                result.finish()
+            }
+        }
     }
 
     private fun showNotification(context: Context) {
