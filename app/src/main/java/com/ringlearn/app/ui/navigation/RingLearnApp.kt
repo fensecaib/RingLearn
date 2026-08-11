@@ -1,9 +1,5 @@
 package com.ringlearn.app.ui.navigation
 
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -26,11 +22,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.painterResource
+import androidx.activity.compose.BackHandler
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.ui.NavDisplay
 import com.ringlearn.app.R
 import com.ringlearn.app.ui.LocalActiveTabIsHome
 import com.ringlearn.app.ui.RootViewModel
@@ -65,7 +61,7 @@ private val bottomDestinations = listOf(
 )
 
 /**
- * 应用根：底部导航 + Navigation 3 (NavDisplay) + 内置键盘覆盖层。
+ * 应用根：底部导航 + 常驻 Tab 宿主 (KeepAliveNavHost) + 内置键盘覆盖层。
  *
  * 键盘交互架构（类真实 IME）：
  * - 底栏 [NavigationBar] 始终组合（仅系统 IME 可见时隐藏，被系统键盘盖住），
@@ -127,6 +123,11 @@ fun RingLearnApp() {
         }
     }
 
+    // 返回键：非首页 Tab 优先回首页（NavDisplay.onBack 的替代实现）
+    BackHandler(enabled = navigationState.topLevelRoute != HomeKey) {
+        navigator.goBack()
+    }
+
     CompositionLocalProvider(
         LocalInAppImeController provides inAppImeController,
         LocalActiveTabIsHome provides (navigationState.topLevelRoute == HomeKey)
@@ -162,13 +163,14 @@ fun RingLearnApp() {
                     }
                 }
             ) { padding ->
-                NavDisplay(
+                // 常驻 Tab 宿主：首访后保持组合，切换仅变 alpha，消灭重复切换的整树重组合开销
+                KeepAliveNavHost(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding),
-                    entries = navigationState.toEntries(entryProvider),
-                    onBack = { navigator.goBack() },
-                    transitionSpec = { fadeIn(tween(0)) togetherWith fadeOut(tween(0)) }
+                    entries = navigationState.toAllEntries(entryProvider),
+                    topLevelRoute = navigationState.topLevelRoute,
+                    initialRoute = HomeKey
                 )
             }
             // 内置键盘覆盖层：盖在底栏之上（z 更高），由 Box contentAlignment 底部对齐

@@ -46,7 +46,7 @@ RingLearn 是一款使用 **Kotlin + Jetpack Compose** 从零构建的日语（J
 | targetSdk | 36（Android 16） |
 | minSdk | 31（Android 12+） |
 | ABI | 仅 arm64-v8a（`ndk.abiFilters`，精简包体积） |
-| 性能 | TTS 全局单例懒加载（切换不重建）、首页 LazyColumn 懒合成、150ms 快速导航过渡、卡片去阴影（色调分层）、内置键盘固定输入框高度避免布局跳动 |
+| 性能 | **常驻 Tab 宿主**（KeepAliveNavHost：首访后保持组合、切换仅 alpha、零重组合）、**release R8 + 资源压缩**（34.8MB→2.9MB，冷启动 ≈0.8s）、TTS 全局单例懒加载、首页 LazyColumn 懒合成、卡片去阴影、内置键盘固定输入框高度 |
 
 > 仓库已配置阿里云 Maven 镜像（`settings.gradle.kts`），国内网络下加速 Maven Central / Gradle 插件下载；
 > `gradle.properties` 强制 Java 优先 IPv4，规避 Maven Central 在部分网络下 IPv6 TLS 握手失败的问题。
@@ -121,7 +121,8 @@ app/src/main/java/com/ringlearn/app/
 │   ├── RootViewModel.kt                // 主题模式 StateFlow
 │   ├── theme/                          // Material3 配色（浅色/深色）
 │   ├── navigation/
-│   │   ├── RingLearnApp.kt             // 底部导航 + Navigation 3 (NavDisplay)
+│   │   ├── RingLearnApp.kt             // 底部导航 + 内置键盘覆盖层（根组件）
+│   │   ├── KeepAliveNavHost.kt         // ★ 常驻 Tab 宿主（首访后保持组合，切换仅 alpha）
 │   │   └── NavigationState.kt          // 多 back stack 导航状态（官方范式）
 │   ├── components/                     // 环形进度 / 火焰 / 空状态 / 加载状态
 │   ├── home/                           // 首页
@@ -241,13 +242,68 @@ dueAt = now + interval * 24h
 - 导航采用 **Navigation 3**：每个顶级 Tab 独立 back stack（`NavigationState` + `Navigator`），
   切换 Tab 保留状态；ViewModels 通过 `hilt-lifecycle-viewmodel-compose` + `ViewModelStoreNavEntryDecorator` 作用域化到 Nav3 条目。
 
+## 6. 性能优化与真机测量（2026-08）
+
+### 6.1 常驻 Tab 宿主（KeepAliveNavHost）
+
+Navigation 3 的 `NavDisplay` 基于 `AnimatedContent` 只组合当前场景：每次切换 Tab 都会销毁旧屏并整树重建目标屏
+（弱机实测单次 250–400ms 长帧）。本项目以自定义宿主 `KeepAliveNavHost` 替代 `NavDisplay`：
+
+- 5 个顶级 Tab 各自拥有独立 back stack（`rememberDecoratedNavEntries`，以 `backStack` 为 remember key，条目与 `content` lambda 实例稳定）。
+- **懒加载首访常驻**：冷启动只组合首页；首次切到某 Tab 才组合该屏，之后保持组合。
+- 切换仅改变 `graphicsLayer { alpha }`（0ms 瞬时）与 z 序；非激活屏 `alpha=0` 不绘制 + `pointerInput` 全事件拦截 + `clearAndSetSemantics` 移出无障碍树。
+- 内容 lambda 用 `remember(entry)` 稳定化：切换时外层 Box 的 Modifier 变化不会重新执行 `entry.Content()`，屏幕子树真正保持组合
+  （logcat 实测切换时屏幕零重组合、`Composer.dispose` 0 次）。
+- 返回键由根层 `BackHandler` 处理（非首页 Tab 优先回首页）。
+
+真机（i6310 Pro / Android 12 / 720×1440）`dumpsys gfxinfo` 对比（重复 Home↔Study×4，release 构建）：
+
+| 指标 | 优化前（NavDisplay + debug） | 优化后（KeepAlive + release R8） |
+| --- | --- | --- |
+| 冷启动 TTID（debug） | ≈ 4.5s | — |
+| 冷启动 TTID（release R8） | — | ≈ 0.80s |
+| 切换 50th / 90th / 95th 分位 | — | 13–18 / 19–20 / 20–34 ms |
+| 切换 99th 分位 | 250–400 ms | 129–150 ms（单屏重绘帧） |
+| 稳态帧率 | — | 60 fps / Janky 0% |
+| 常驻 5 屏内存 PSS | ≈117 MB | ≈60 MB |
+
+> 剩余 99 分位单帧（~150ms）为弱机对全屏 Compose 场景的 measure+draw 重录成本，任何全屏切换架构（含 NavDisplay）都需支付；
+> 90/95 分位与稳态帧率已显著优于基线，且切换不再触发屏幕重组合/重建。
+
+### 6.2 Release 构建（R8 + 资源压缩）
+
+- `release` 开启 `isMinifyEnabled=true` + `isShrinkResources=true`（R8 full mode），APK 由 debug 34.8MB 降至 2.9MB；
+  签名使用 debug 签名（仅本机测量/学习交流，不上架；上架时替换为正式 keystore）。
+- `proguard-rules.pro` 补充 kotlinx.serialization keep 规则（NavKey 等 `@Serializable` 类）。
+- Compose 稳定度审计：`composeCompiler` 报告输出至 `app/build/compose_reports`；核心数据类（WordEntity/HomeStats）均为 stable。
+
+### 6.3 测量方法（adb 原生命令）
+
+```bash
+# 冷启动 TTID（release）
+adb shell am force-stop com.ringlearn.app
+adb shell am start -W -n com.ringlearn.app/.MainActivity
+
+# Tab 切换帧统计：先 reset，再自动化点按各 Tab 数轮，最后取统计
+adb shell dumpsys gfxinfo com.ringlearn.app reset
+adb shell input tap 213 1296   # 学习 Tab（坐标随设备分辨率调整）
+adb shell dumpsys gfxinfo com.ringlearn.app
+
+# 内存
+adb shell dumpsys meminfo com.ringlearn.app
+```
+
+> 说明：本机为 API 31 弱机（i6310 Pro），未 root、无 API 33+ 设备，故不采用
+> Baseline Profile / Macrobenchmark 工程（Google 官方推荐方案需要 API 33+/root 设备生成 profile）；
+> 代码级优化（常驻宿主 + R8 + 稳定度审计）已在真机验证，属于对弱机收益最大的部分。
+
 ## 6. 配色方案
 
 主色天蓝 `#0EA5E9`、辅助青绿 `#14B8A6`，基于 Material 3 `lightColorScheme / darkColorScheme` 生成
 Primary / Secondary / Surface / Container 等全套色阶，深色模式使用提亮变体保证对比度。
 详见 `ui/theme/Color.kt` 与 `ui/theme/Theme.kt`。
 
-## 7. 常见问题
+## 8. 常见问题
 
 - **首次运行首页一直显示加载中**：确认 `assets/jlpt_n2_words.json` 存在且未损坏（词库为空时 `isReady=false`）。
 - **TTS 无声音**：请确认系统已安装日语语音包（设置 → 系统 → 无障碍 → 文字转语音）；无 Google Play Store 的设备可能缺少日语语音。

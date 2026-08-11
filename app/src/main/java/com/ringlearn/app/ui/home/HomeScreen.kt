@@ -3,6 +3,7 @@ package com.ringlearn.app.ui.home
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -85,6 +86,8 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // 性能采集：首页数据就绪后上报 fully drawn（TTFD），供 `am start -W`/媒体测量完整启动路径
+    ReportDrawnWhen { uiState.stats.isReady }
     val haptic = rememberHapticManager()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current

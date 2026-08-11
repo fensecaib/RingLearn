@@ -28,7 +28,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // 性能/体积优化：R8 full mode + 资源压缩
+            isMinifyEnabled = true
+            isShrinkResources = true
+            // 仅本场测量/学习交流用 debug 签名（不上架）；Play 上架时替换为正式 keystore
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -52,6 +56,11 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+    // Compose 稳定度审计报告（仅产出报告，不影响构建）
+    composeCompiler {
+        reportsDestination = layout.buildDirectory.dir("compose_reports")
+        metricsDestination = layout.buildDirectory.dir("compose_metrics")
     }
 }
 

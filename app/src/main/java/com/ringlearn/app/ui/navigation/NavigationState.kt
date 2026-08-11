@@ -89,6 +89,19 @@ class Navigator(val state: NavigationState) {
 fun NavigationState.toEntries(
     entryProvider: (NavKey) -> NavEntry<NavKey>
 ): SnapshotStateList<NavEntry<NavKey>> {
+    return toAllEntries(entryProvider).map { it.second }.toMutableStateList()
+}
+
+/**
+ * 全部顶级 Tab 的装饰条目（每个 Tab 一个 back stack）。
+ * 供常驻 Tab 宿主使用：所有条目保持组合、用 alpha 切换可见性，
+ * 彻底避免 NavDisplay「离开即销毁 → 每次切换整树重组合」的重复开销。
+ * [entryProvider] 必须在调用方 remember 稳定，避免重建全部 NavEntry。
+ */
+@Composable
+fun NavigationState.toAllEntries(
+    entryProvider: (NavKey) -> NavEntry<NavKey>
+): List<Pair<NavKey, NavEntry<NavKey>>> {
     val decoratedEntries = backStacks.mapValues { (_, stack) ->
         val decorators = listOf(
             rememberSaveableStateHolderNavEntryDecorator<NavKey>(),
@@ -100,7 +113,9 @@ fun NavigationState.toEntries(
             entryProvider = entryProvider
         )
     }
-    return stacksInUse
-        .flatMap { decoratedEntries[it] ?: emptyList() }
-        .toMutableStateList()
+    // 保持确定顺序：backStacks 按顶级路由插入序（Home/Study/WordBook/Quiz/Lookup）
+    // NavEntry.key 为 private，故由对应的 back stack 键明确路由关系
+    return decoratedEntries.mapNotNull { (route, stackEntries) ->
+        stackEntries.firstOrNull()?.let { route to it }
+    }
 }
