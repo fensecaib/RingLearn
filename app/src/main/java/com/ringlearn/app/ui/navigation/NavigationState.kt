@@ -113,9 +113,10 @@ fun NavigationState.toAllEntries(
             entryProvider = entryProvider
         )
     }
-    // 保持确定顺序：backStacks 按顶级路由插入序（Home/Study/WordBook/Quiz/Lookup）
+    // 保持确定顺序：backStacks 按顶级路由插入序（Home/Study/WordBook/Quiz/Lookup/Ai）
     // NavEntry.key 为 private，故由对应的 back stack 键明确路由关系
     return decoratedEntries.mapNotNull { (route, stackEntries) ->
         stackEntries.firstOrNull()?.let { route to it }
     }
 }
+

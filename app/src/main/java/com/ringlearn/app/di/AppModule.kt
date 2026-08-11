@@ -3,6 +3,7 @@ package com.ringlearn.app.di
 import android.content.Context
 import androidx.room.Room
 import com.ringlearn.app.data.local.AppDatabase
+import com.ringlearn.app.data.local.dao.AiChatDao
 import com.ringlearn.app.data.local.dao.ReviewLogDao
 import com.ringlearn.app.data.local.dao.WordDao
 import dagger.Module
@@ -20,6 +21,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "ringlearn.db")
+            .addMigrations(AppDatabase.MIGRATION_1_2)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
 
@@ -28,4 +30,7 @@ object AppModule {
 
     @Provides
     fun provideReviewLogDao(db: AppDatabase): ReviewLogDao = db.reviewLogDao()
+
+    @Provides
+    fun provideAiChatDao(db: AppDatabase): AiChatDao = db.aiChatDao()
 }

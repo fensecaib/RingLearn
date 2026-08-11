@@ -242,6 +242,22 @@ dueAt = now + interval * 24h
 - 导航采用 **Navigation 3**：每个顶级 Tab 独立 back stack（`NavigationState` + `Navigator`），
   切换 Tab 保留状态；ViewModels 通过 `hilt-lifecycle-viewmodel-compose` + `ViewModelStoreNavEntryDecorator` 作用域化到 Nav3 条目。
 
+
+### 5.9 AI 对话（OpenAI 兼容 · DeepSeek）
+
+文件：`data/ai/`（AiClient / AiChatRepository / AiChatConfigRepository）+ `ui/ai/`（AiChatScreen / AiChatViewModel / MarkdownText）。
+
+- **OpenAI 兼容接口**：`POST {baseUrl}/chat/completions`，支持用户自定义 baseUrl / API Key / 模型 / 最大输出 Tokens / 系统提示词；
+  默认预填 `https://api.deepseek.com` + `deepseek-v4-flash`（2026-07 官方公测版，经真机验证）。
+- **流式输出**：OkHttp 手动解析 SSE（`data:` 行 → `choices[].delta.content` 增量累加，`data: [DONE]` 结束，跳过注释/空行），
+  无第三方库；取消协程时同步 cancel 底层 HTTP 调用；非流式最小请求用于「测试连接」。
+- **消息持久化**：Room v2 新增 `ai_chat_messages` 表（v1→v2 提供 `MIGRATION_1_2` 创建表，不破坏既有词库数据）；
+  单会话（`sessionId` 隔离），「重置会话」仅清空当前会话，历史数据保留。
+- **上下文统计徽章**：顶部徽章实时显示「N 轮 · M chars」（轮数=用户消息数，字符=全部消息内容长度），
+  点击展开说明「完整上下文已发送：system 提示词固定于首条，历史消息全部随请求携带（不压缩）」——对应本应用不压缩上下文的决策。
+- **密钥安全**：API Key 用 Android Keystore AES/GCM 加密后写入 DataStore（`ringlearn_ai`），明文不落盘、不入库。
+- **Markdown 轻量渲染**：自绘解析标题/加粗/行内代码/列表/代码块，剥离原始 HTML，无第三方 Markdown 库。
+- **输入复用**：AI 输入框复用 `RingLearnImeField`（内置罗马音键盘 / 一键切换系统输入法），键盘覆盖层与底栏显隐逻辑与其他页面一致。
 ## 6. 性能优化与真机测量（2026-08）
 
 ### 6.1 常驻 Tab 宿主（KeepAliveNavHost）

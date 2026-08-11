@@ -35,6 +35,7 @@ import com.ringlearn.app.ui.home.HomeScreen
 import com.ringlearn.app.ui.ime.InAppImeController
 import com.ringlearn.app.ui.ime.InAppKeyboardOverlay
 import com.ringlearn.app.ui.ime.LocalInAppImeController
+import com.ringlearn.app.ui.ai.AiChatScreen
 import com.ringlearn.app.ui.lookup.LookupScreen
 import com.ringlearn.app.ui.quiz.QuizScreen
 import com.ringlearn.app.ui.study.StudyScreen
@@ -46,6 +47,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object WordBookKey : NavKey
 @Serializable data object QuizKey : NavKey
 @Serializable data object LookupKey : NavKey
+@Serializable data object AiKey : NavKey
 
 private data class BottomDestination(
     val key: NavKey,
@@ -58,7 +60,8 @@ private val bottomDestinations = listOf(
     BottomDestination(StudyKey, "学习", R.drawable.ic_study),
     BottomDestination(LookupKey, "查词", R.drawable.ic_search),
     BottomDestination(WordBookKey, "生词本", R.drawable.ic_wordbook),
-    BottomDestination(QuizKey, "测验", R.drawable.ic_quiz)
+    BottomDestination(QuizKey, "测验", R.drawable.ic_quiz),
+    BottomDestination(AiKey, "AI", R.drawable.ic_ai)
 )
 
 /**
@@ -76,7 +79,7 @@ private val bottomDestinations = listOf(
 fun RingLearnApp() {
     val navigationState = rememberNavigationState(
         startRoute = HomeKey,
-        topLevelRoutes = setOf(HomeKey, StudyKey, WordBookKey, QuizKey, LookupKey)
+        topLevelRoutes = setOf(HomeKey, StudyKey, WordBookKey, QuizKey, LookupKey, AiKey)
     )
     val navigator = remember { Navigator(navigationState) }
     val inAppImeController = remember { InAppImeController() }
@@ -120,6 +123,9 @@ fun RingLearnApp() {
             }
             entry<LookupKey> {
                 LookupScreen()
+            }
+            entry<AiKey> {
+                AiChatScreen()
             }
         }
     }
@@ -182,3 +188,5 @@ fun RingLearnApp() {
         }
     }
 }
+
+
