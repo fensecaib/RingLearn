@@ -23,27 +23,39 @@ import androidx.compose.ui.graphics.drawscope.scale
  * 火焰带有轻微缩放/摇摆的无限循环动画，底部附带渐变光晕。
  */
 @Composable
-fun FlameIcon(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "flame")
-    val scale by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 650, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "flameScale"
-    )
-    val tilt by transition.animateFloat(
-        initialValue = -3f,
-        targetValue = 3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "flameTilt"
-    )
+fun FlameIcon(
+    modifier: Modifier = Modifier,
+    active: Boolean = true
+) {
+    if (active) {
+        val transition = rememberInfiniteTransition(label = "flame")
+        val scale by transition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "flameScale"
+        )
+        val tilt by transition.animateFloat(
+            initialValue = -3f,
+            targetValue = 3f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "flameTilt"
+        )
+        FlameCanvas(modifier = modifier, scale = scale, tilt = tilt)
+    } else {
+        // 非激活（首页不在前台）时渲染静态火焰，避免后台 60fps 空转
+        FlameCanvas(modifier = modifier, scale = 1f, tilt = 0f)
+    }
+}
 
+@Composable
+private fun FlameCanvas(modifier: Modifier, scale: Float, tilt: Float) {
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height

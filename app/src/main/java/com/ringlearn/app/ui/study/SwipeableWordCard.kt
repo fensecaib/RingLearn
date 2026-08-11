@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -196,36 +197,43 @@ fun SwipeableWordCard(
             )
         }
 
-        Text(
-            text = "认识",
-            color = Color.White,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .graphicsLayer { alpha = knownAlpha }
-                .padding(end = 28.dp)
-        )
-        Text(
-            text = "不认识",
-            color = Color.White,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .graphicsLayer { alpha = unknownAlpha }
-                .padding(start = 28.dp)
-        )
-        Text(
-            text = "收进生词本",
-            color = Color.White,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .graphicsLayer { alpha = upAlpha }
-                .padding(top = 24.dp)
-        )
+        // 语义指示文字：仅当拖动出现时组合（空闲零节点，降低卡片组合成本）
+        if (knownAlpha > 0.01f) {
+            Text(
+                text = "认识",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .graphicsLayer { alpha = knownAlpha }
+                    .padding(end = 28.dp)
+            )
+        }
+        if (unknownAlpha > 0.01f) {
+            Text(
+                text = "不认识",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .graphicsLayer { alpha = unknownAlpha }
+                    .padding(start = 28.dp)
+            )
+        }
+        if (upAlpha > 0.01f) {
+            Text(
+                text = "收进生词本",
+                color = Color.White,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .graphicsLayer { alpha = upAlpha }
+                    .padding(top = 24.dp)
+            )
+        }
 
         // ---- 3D 翻转卡片本体 ----
         Card(
@@ -240,7 +248,9 @@ fun SwipeableWordCard(
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            // 弱机上去掉阴影（渲染昂贵），用细边框保持视觉层次
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Box(Modifier.fillMaxSize()) {
                 // 背面（默认 rotationY=180 预旋转；随 flipRotation 转回正面）

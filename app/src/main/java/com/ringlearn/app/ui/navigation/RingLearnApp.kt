@@ -32,6 +32,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.ringlearn.app.R
+import com.ringlearn.app.ui.LocalActiveTabIsHome
 import com.ringlearn.app.ui.RootViewModel
 import com.ringlearn.app.ui.home.HomeScreen
 import com.ringlearn.app.ui.ime.InAppImeController
@@ -126,7 +127,10 @@ fun RingLearnApp() {
         }
     }
 
-    CompositionLocalProvider(LocalInAppImeController provides inAppImeController) {
+    CompositionLocalProvider(
+        LocalInAppImeController provides inAppImeController,
+        LocalActiveTabIsHome provides (navigationState.topLevelRoute == HomeKey)
+    ) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.BottomCenter
@@ -164,7 +168,7 @@ fun RingLearnApp() {
                         .padding(padding),
                     entries = navigationState.toEntries(entryProvider),
                     onBack = { navigator.goBack() },
-                    transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(180)) }
+                    transitionSpec = { fadeIn(tween(0)) togetherWith fadeOut(tween(0)) }
                 )
             }
             // 内置键盘覆盖层：盖在底栏之上（z 更高），由 Box contentAlignment 底部对齐

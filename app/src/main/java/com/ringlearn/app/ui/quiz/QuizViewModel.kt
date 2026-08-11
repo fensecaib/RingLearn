@@ -53,9 +53,11 @@ class QuizViewModel @Inject constructor(
         loadJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             runCatching {
-                val targets = wordRepository.getRandomWords(questionCount)
-                val pool = wordRepository.getRandomWords(questionCount * 4)
-                buildQuestions(targets, pool)
+                // 一次随机查询（questionCount*5 词）同时提供目标题与干扰项池，
+                // 避免两次 ORDER BY RANDOM() 全表扫描（弱机首访提速）
+                val words = wordRepository.getRandomWords(questionCount * 5)
+                val targets = words.take(questionCount)
+                buildQuestions(targets, words)
             }.onSuccess { questions ->
                 _uiState.value = QuizUiState(isLoading = false, questions = questions)
             }.onFailure { e ->

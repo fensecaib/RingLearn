@@ -51,7 +51,7 @@ class NavigationState(
 ) {
     var topLevelRoute: NavKey by topLevelRoute
 
-    /** 当前实际参与组合的栈：首页栈 + 当前 Tab 栈（切换时保留状态）。 */
+    /** 当前实际参与组合的栈：首页栈 + 当前 Tab 栈（NavDisplay 仅组合当前场景）。 */
     val stacksInUse: List<NavKey>
         get() = if (topLevelRoute == startRoute) {
             listOf(startRoute)

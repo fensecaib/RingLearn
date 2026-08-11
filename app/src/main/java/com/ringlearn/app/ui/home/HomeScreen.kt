@@ -63,6 +63,7 @@ import com.ringlearn.app.R
 import com.ringlearn.app.domain.model.AppSettings
 import com.ringlearn.app.domain.model.ThemeMode
 import com.ringlearn.app.ui.components.CircularProgressRing
+import com.ringlearn.app.ui.LocalActiveTabIsHome
 import com.ringlearn.app.ui.components.EmptyState
 import com.ringlearn.app.ui.components.FlameIcon
 import com.ringlearn.app.ui.components.LoadingState
@@ -363,7 +364,7 @@ private fun StreakCard(streakDays: Int, modifier: Modifier = Modifier) {
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FlameIcon(modifier = Modifier.size(40.dp))
+            FlameIcon(modifier = Modifier.size(40.dp), active = LocalActiveTabIsHome.current)
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(
