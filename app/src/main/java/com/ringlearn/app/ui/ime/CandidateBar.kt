@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -66,7 +66,8 @@ fun CandidateBar(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                items(candidates, key = { it.text }) { candidate ->
+                // 候选可能含同文本（假名/片假名/词库表记），用索引作 key 避免崩溃
+                itemsIndexed(candidates, key = { i, _ -> i }) { _, candidate ->
                     CandidateChip(candidate = candidate, haptic = haptic, onClick = { onSelect(candidate) })
                 }
             }

@@ -29,9 +29,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,7 +39,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,7 +47,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
 import com.ringlearn.app.ui.components.EmptyState
+import com.ringlearn.app.ui.ime.InAppImeBinding
 import com.ringlearn.app.ui.ime.LocalInAppImeController
+import com.ringlearn.app.ui.ime.contentOverflowDp
 import com.ringlearn.app.ui.ime.RingLearnImeField
 import com.ringlearn.app.ui.ime.rememberRingLearnImeState
 import com.ringlearn.app.ui.rememberHapticManager
@@ -115,27 +114,20 @@ fun WordBookScreen(
             onCompositionChange = viewModel::onCompositionChange,
             onCommit = {}
         )
-        // 绑定根层内置键盘覆盖层：键盘可见时把 IME 状态/候选/收起回调交给覆盖层渲染
+        // 绑定根层内置键盘覆盖层（键盘可见时渲染，离开页面自动解绑）
         val inAppImeController = LocalInAppImeController.current
         val imeActive = useInAppKeyboard && keyboardVisible
-        val contentOverflowDp = with(LocalDensity.current) {
-            (inAppImeController.contentOverflowPx).coerceAtLeast(0).toDp()
-        }
-        SideEffect {
-            if (imeActive) {
-                inAppImeController.ime = ime
-                inAppImeController.candidates = imeDictionaryCandidates
-                inAppImeController.onCollapse = {
-                    haptic.click()
-                    keyboardVisible = false
-                }
-            } else {
-                inAppImeController.ime = null
+        InAppImeBinding(
+            controller = inAppImeController,
+            ime = ime,
+            candidates = imeDictionaryCandidates,
+            active = imeActive,
+            onCollapse = {
+                haptic.click()
+                keyboardVisible = false
             }
-        }
-        DisposableEffect(Unit) {
-            onDispose { inAppImeController.ime = null }
-        }
+        )
+        val contentOverflowDp = inAppImeController.contentOverflowDp()
         Column(
             modifier = Modifier
                 .fillMaxSize()

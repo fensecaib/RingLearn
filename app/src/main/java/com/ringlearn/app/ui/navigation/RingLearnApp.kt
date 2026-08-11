@@ -17,6 +17,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -24,9 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavKey
@@ -90,16 +89,15 @@ fun RingLearnApp() {
     // 因此仅当处于系统输入法模式（!useInAppKeyboard）时才据此隐藏底栏。
     val systemImeVisible = WindowInsets.isImeVisible
     val hideDock = systemImeVisible && !useInAppKeyboard
-    val density = LocalDensity.current
 
-    // 底栏实测高度（含系统导航栏 inset）；键盘覆盖层高度用固定默认值（QWERTY ~240dp）
+    // 底栏实测高度（含系统导航栏 inset）
     var dockHeightPx by remember { mutableIntStateOf(0) }
-    val dockHeightDp = with(density) { dockHeightPx.toDp() }
-    val keyboardHeightDp = 240.dp
 
-    // 键盘覆盖高度超出底栏的部分：页面列表据此让出滚动区（内容不整体重排）
-    inAppImeController.contentOverflowPx = with(density) {
-        (keyboardHeightDp - dockHeightDp).coerceAtLeast(0.dp).roundToPx()
+    // 键盘覆盖高度超出底栏的部分 = 键盘实测高度 - 底栏高度（导航栏 padding 两侧相消），
+    // 供页面列表滚动让出键盘区；QWERTY/五十音/候选栏出现时随实测高度自适应
+    SideEffect {
+        inAppImeController.contentOverflowPx =
+            (inAppImeController.keyboardHeightPx - dockHeightPx).coerceAtLeast(0)
     }
 
     // 稳定 entryProvider 身份：避免根重组重建全部 NavEntry 导致页面整树重组合

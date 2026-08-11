@@ -9,7 +9,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -293,56 +292,6 @@ fun RingLearnImeCandidateBar(
         onSelect = { ime.commitCandidate(it.text) },
         modifier = modifier
     )
-}
-
-/**
- * 统一的“应用内输入框”（兼容入口）：字段 + 候选条 + 键盘按顺序纵向排列。
- * 需要把键盘停靠在屏幕底部时，请改用 [RingLearnImeField] + [RingLearnImeCandidateBar] + [RomajiKeyboard]。
- */
-@Composable
-fun RingLearnTextField(
-    state: TextFieldState,
-    useInAppKeyboard: Boolean,
-    haptic: HapticManager,
-    onSwitchToSystemIme: () -> Unit,
-    onCompositionChange: (composing: Boolean, kana: String) -> Unit = { _, _ -> },
-    imeDictionaryCandidates: List<WordEntity> = emptyList(),
-    modifier: Modifier = Modifier,
-    placeholder: String = "",
-    leadingIcon: (@Composable () -> Unit)? = null,
-    trailingIcon: (@Composable () -> Unit)? = null,
-    onSwitchToInAppKeyboard: (() -> Unit)? = null,
-    onCommit: () -> Unit = {}
-) {
-    val ime = rememberRingLearnImeState(
-        state = state,
-        onSwitchToSystemIme = onSwitchToSystemIme,
-        onCompositionChange = onCompositionChange,
-        onCommit = onCommit
-    )
-    Column(modifier = modifier) {
-        RingLearnImeField(
-            ime = ime,
-            useInAppKeyboard = useInAppKeyboard,
-            placeholder = placeholder,
-            leadingIcon = leadingIcon,
-            trailingIcon = trailingIcon,
-            onSwitchToInAppKeyboard = onSwitchToInAppKeyboard
-        )
-        if (useInAppKeyboard) {
-            RingLearnImeCandidateBar(
-                ime = ime,
-                imeDictionaryCandidates = imeDictionaryCandidates,
-                haptic = haptic
-            )
-            RomajiKeyboard(
-                layout = ime.keyboardLayout,
-                kanaMode = ime.kanaMode,
-                haptic = haptic,
-                onKey = ime::handleKey
-            )
-        }
-    }
 }
 
 /** 安全地把光标移动到 [pos]（处理空文本与边界）。 */
