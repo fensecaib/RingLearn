@@ -24,4 +24,13 @@ class RootViewModel @Inject constructor(
             started = SharingStarted.Eagerly,
             initialValue = ThemeMode.SYSTEM
         )
+
+    /** 是否使用应用内置键盘（用于根层 dock 显隐门控） */
+    val useInAppKeyboard: StateFlow<Boolean> = settingsRepository.settings
+        .map { it.useInAppKeyboard }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = true
+        )
 }

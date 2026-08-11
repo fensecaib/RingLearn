@@ -27,6 +27,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,9 +50,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
 import com.ringlearn.app.ui.components.EmptyState
-import com.ringlearn.app.ui.ime.RingLearnImeCandidateBar
+import com.ringlearn.app.ui.ime.LocalInAppImeController
 import com.ringlearn.app.ui.ime.RingLearnImeField
-import com.ringlearn.app.ui.ime.RomajiKeyboard
 import com.ringlearn.app.ui.ime.rememberRingLearnImeState
 import com.ringlearn.app.ui.rememberHapticManager
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -60,8 +61,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WordBookScreen(
-    viewModel: WordBookViewModel = hiltViewModel(),
-    onInAppImeVisibilityChange: (Boolean) -> Unit = {}
+    viewModel: WordBookViewModel = hiltViewModel()
 ) {
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
@@ -94,17 +94,11 @@ fun WordBookScreen(
         }
     }
 
-    // 内置键盘收起状态：可一键收起（键盘不再占用屏幕），点击字段/「显示键盘」恢复
-    var keyboardVisible by rememberSaveable { mutableStateOf(true) }
-    LaunchedEffect(useInAppKeyboard) {
-        if (useInAppKeyboard) keyboardVisible = true
-    }
-
-    // 输入面可见性上报：内置键盘停靠时通知根组件隐藏底部导航栏（dock）。
-    val inAppImeShown = useInAppKeyboard && keyboardVisible
-    SideEffect { onInAppImeVisibilityChange(inAppImeShown) }
-    DisposableEffect(Unit) {
-        onDispose { onInAppImeVisibilityChange(false) }
+    // 内置键盘默认收起（点击输入框才弹出，类真实 IME）；由根层 InAppKeyboardOverlay 覆盖渲染
+    var keyboardVisible by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = keyboardVisible) {
+        haptic.click()
+        keyboardVisible = false
     }
 
     Scaffold(
@@ -121,6 +115,27 @@ fun WordBookScreen(
             onCompositionChange = viewModel::onCompositionChange,
             onCommit = {}
         )
+        // 绑定根层内置键盘覆盖层：键盘可见时把 IME 状态/候选/收起回调交给覆盖层渲染
+        val inAppImeController = LocalInAppImeController.current
+        val imeActive = useInAppKeyboard && keyboardVisible
+        val contentOverflowDp = with(LocalDensity.current) {
+            (inAppImeController.contentOverflowPx).coerceAtLeast(0).toDp()
+        }
+        SideEffect {
+            if (imeActive) {
+                inAppImeController.ime = ime
+                inAppImeController.candidates = imeDictionaryCandidates
+                inAppImeController.onCollapse = {
+                    haptic.click()
+                    keyboardVisible = false
+                }
+            } else {
+                inAppImeController.ime = null
+            }
+        }
+        DisposableEffect(Unit) {
+            onDispose { inAppImeController.ime = null }
+        }
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -191,7 +206,10 @@ fun WordBookScreen(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 12.dp)
+                        contentPadding = PaddingValues(
+                            start = 16.dp, top = 8.dp, end = 16.dp,
+                            bottom = 12.dp + if (imeActive) contentOverflowDp else 0.dp
+                        )
                     ) {
                         items(favorites, key = { it.id }) { word ->
                             FavoriteWordItem(
@@ -209,25 +227,6 @@ fun WordBookScreen(
                 }
             }
 
-            // 键盘停靠底部（仅内置键盘模式且未收起）
-            if (inAppImeShown) {
-                RingLearnImeCandidateBar(
-                    ime = ime,
-                    imeDictionaryCandidates = imeDictionaryCandidates,
-                    haptic = haptic
-                )
-                RomajiKeyboard(
-                    layout = ime.keyboardLayout,
-                    kanaMode = ime.kanaMode,
-                    composing = ime.composing,
-                    haptic = haptic,
-                    onKey = ime::handleKey,
-                    onCollapse = {
-                        haptic.click()
-                        keyboardVisible = false
-                    }
-                )
-            }
         }
     }
 }
