@@ -56,13 +56,11 @@ class ChatHistoryWindowTest {
     fun `append older prepends without dropping newest`() {
         val w = ChatHistoryWindow(pageSize = 40)
         val full = (1L..120L).map(::msg)
-        w.sync(full) // 81..120
+        w.sync(full)
         assertTrue(w.appendOlder(full))
         assertEquals((41L..120L).toList(), ids(w.items))
-        // 继续加载更早
         assertTrue(w.appendOlder(full))
         assertEquals((1L..120L).toList(), ids(w.items))
-        // 已到最老，不再有更早
         assertFalse(w.appendOlder(full))
     }
 
@@ -71,8 +69,7 @@ class ChatHistoryWindowTest {
         val w = ChatHistoryWindow(pageSize = 40)
         var full = (1L..120L).map(::msg)
         w.sync(full)
-        w.appendOlder(full) // 41..120
-        // 新消息 121 到达
+        w.appendOlder(full)
         full = full + msg(121L)
         w.sync(full)
         assertEquals((82L..121L).toList(), ids(w.items))
@@ -86,5 +83,32 @@ class ChatHistoryWindowTest {
         w.sync((200L..230L).map(::msg))
         assertEquals((200L..230L).toList(), ids(w.items))
         assertFalse(w.hasMoreOlder)
+    }
+
+    @Test
+    fun `lastMessageIndex without sentinel`() {
+        assertEquals(39, lastMessageIndex(hasMoreOlder = false, messageCount = 40))
+    }
+
+    @Test
+    fun `lastMessageIndex with sentinel`() {
+        assertEquals(40, lastMessageIndex(hasMoreOlder = true, messageCount = 40))
+    }
+
+    @Test
+    fun `lastMessageIndex empty list`() {
+        assertEquals(0, lastMessageIndex(hasMoreOlder = false, messageCount = 0))
+        assertEquals(0, lastMessageIndex(hasMoreOlder = true, messageCount = 0))
+    }
+
+    @Test
+    fun `sync refreshes content for same ids`() {
+        val w = ChatHistoryWindow(pageSize = 40)
+        w.sync((1L..50L).map { msg(it) })
+        // 仅 id=50 内容更新（模拟助手回复完成写库，id 不变）
+        val updated = (1L..50L).map { if (it == 50L) msg(50L).copy(content = "updated-reply") else msg(it) }
+        w.sync(updated)
+        assertEquals(50L, w.items.last().id)
+        assertEquals("updated-reply", w.items.last().content)
     }
 }

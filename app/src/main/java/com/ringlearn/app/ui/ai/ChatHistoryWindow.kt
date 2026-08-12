@@ -28,6 +28,9 @@ internal class ChatHistoryWindow(private val pageSize: Int = PAGE_SIZE) {
         }
         oldestKnownId = full.first().id
         val latestId = full.last().id
+        // 先按 id 用 full 中最新实例刷新窗口内容（助手回复完成写库时仅内容变化、id 不变，必须换新实例）
+        val fullById = full.associateBy { it.id }
+        items = items.mapNotNull { fullById[it.id] }
         // 窗口为空 / 末尾有新消息 / 末尾被回退（重置后重建）→ 重置为最近一页
         if (items.isEmpty() || items.last().id != latestId || items.last().id > latestId) {
             items = full.takeLast(pageSize)
@@ -47,3 +50,6 @@ internal class ChatHistoryWindow(private val pageSize: Int = PAGE_SIZE) {
         const val PAGE_SIZE = 40
     }
 }
+/** 列表最后一条消息的 item index（考虑「加载更早」哨兵占据 index 0）。 */
+internal fun lastMessageIndex(hasMoreOlder: Boolean, messageCount: Int): Int =
+    if (messageCount == 0) 0 else if (hasMoreOlder) messageCount else messageCount - 1

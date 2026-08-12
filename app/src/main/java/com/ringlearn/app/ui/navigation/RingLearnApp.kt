@@ -94,11 +94,11 @@ fun RingLearnApp() {
     // 底栏实测高度（含系统导航栏 inset）
     var dockHeightPx by remember { mutableIntStateOf(0) }
 
-    // 键盘覆盖高度超出底栏的部分 = 键盘实测高度 - 底栏高度（导航栏 padding 两侧相消），
-    // 供页面列表滚动让出键盘区；QWERTY/五十音/候选栏出现时随实测高度自适应
+    // 订阅键盘实测高度：高度变化（开合/五十音/候选栏）时重算 contentOverflowPx，
+    // 供页面输入行/列表让出键盘区（SideEffect 内读不订阅，须在组合期读取触发重组）
+    val keyboardHeightPx = inAppImeController.keyboardHeightPx
     SideEffect {
-        inAppImeController.contentOverflowPx =
-            (inAppImeController.keyboardHeightPx - dockHeightPx).coerceAtLeast(0)
+        inAppImeController.contentOverflowPx = (keyboardHeightPx - dockHeightPx).coerceAtLeast(0)
     }
 
     // 稳定 entryProvider 身份：避免根重组重建全部 NavEntry 导致页面整树重组合

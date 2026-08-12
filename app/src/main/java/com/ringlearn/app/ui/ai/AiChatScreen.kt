@@ -110,19 +110,33 @@ fun AiChatScreen(
         keyboardVisible = false
     }
 
-    // 滚动到底：仅首次加载/新消息追加（末条 id 变化）时瞬时滚动；上滑加载更早不触发
+    // 滚动到底：首次加载/新消息追加（末条 id 变化）时，靠近底部则钉到最后一条（考虑「加载更早」哨兵 index 0）
     var lastBottomId by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(messages.lastOrNull()?.id) {
         val last = messages.lastOrNull() ?: return@LaunchedEffect
         if (lastBottomId == null || last.id != lastBottomId) {
             val isInitial = lastBottomId == null
             val info = listState.layoutInfo
+            val lastIdx = lastMessageIndex(hasMoreOlder, messages.size)
             // 首次加载始终回到底部；新消息仅在用户原本靠近底部时跟随
             val nearBottom = isInitial || info.totalItemsCount == 0 ||
-                ((info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= info.totalItemsCount - 3)
-            if (nearBottom) listState.scrollToItem(messages.size - 1)
+                ((info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= lastIdx - 2)
+            if (nearBottom) listState.scrollToItem(lastIdx)
         }
         lastBottomId = last.id
+    }
+    // 流式钉底：跟随流式增长滚动到最后一条（仅订阅 streamingText，不引起整屏重组；用户上滑读历史时不打断）
+    LaunchedEffect(Unit) {
+        viewModel.streamingText.collect {
+            val size = viewModel.messages.value.size
+            if (size > 0) {
+                val lastIdx = lastMessageIndex(viewModel.hasMoreOlder.value, size)
+                val info = listState.layoutInfo
+                val nearBottom = info.totalItemsCount == 0 ||
+                    ((info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= lastIdx - 2)
+                if (nearBottom) listState.scrollToItem(lastIdx)
+            }
+        }
     }
     // 上滑到顶部自动加载更早历史（无限滚动，每页触发一次）
     LaunchedEffect(Unit) {
@@ -243,7 +257,7 @@ fun AiChatScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             start = 12.dp, top = 8.dp, end = 12.dp,
-                            bottom = 12.dp + if (imeActive) contentOverflowDp else 0.dp
+                            bottom = 12.dp
                         )
                     ) {
                         if (hasMoreOlder) {
@@ -268,38 +282,30 @@ fun AiChatScreen(
                         }
                     }
                 }
-                // 浮动回到顶部/底部圆钮（按需显示，不占常驻空间）
+                // 浮动「回到底部」圆钮：不在最后一条时显示（↑ 已移除）
                 val atBottom by remember { derivedStateOf {
                     val info = listState.layoutInfo
                     info.totalItemsCount == 0 ||
-                        ((info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= info.totalItemsCount - 2)
+                        ((info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= lastMessageIndex(hasMoreOlder, messages.size))
                 } }
-                val scrolledDown by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 12.dp, bottom = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (scrolledDown) {
-                        SmallFloatingActionButton(onClick = {
+                if (!atBottom) {
+                    SmallFloatingActionButton(
+                        onClick = {
                             haptic.click()
-                            scope.launch { listState.animateScrollToItem(0) }
-                        }) { Text("↑", style = MaterialTheme.typography.titleMedium) }
-                    }
-                    if (!atBottom) {
-                        SmallFloatingActionButton(onClick = {
-                            haptic.click()
-                            scope.launch { listState.scrollToItem(messages.size - 1) }
-                        }) { Text("↓", style = MaterialTheme.typography.titleMedium) }
-                    }
+                            scope.launch { listState.scrollToItem(lastMessageIndex(hasMoreOlder, messages.size)) }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 12.dp, bottom = 12.dp)
+                    ) { Text("↓", style = MaterialTheme.typography.titleMedium) }
                 }
             }
             // 输入区：复用内置罗马音键盘 / 系统输入法
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp),
+                    // 内置键盘弹出时抬升到键盘（含候选栏）正上方，避免遮挡输入框
+                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = if (imeActive) contentOverflowDp else 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 RingLearnImeField(
