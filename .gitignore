@@ -29,3 +29,5 @@ captures/
 # Misc temp
 *.tmp
 *~
+# Agent-local config / skills (not versioned)
+.codex/
