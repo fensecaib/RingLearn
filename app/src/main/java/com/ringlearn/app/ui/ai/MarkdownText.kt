@@ -135,6 +135,8 @@ fun MarkdownText(
         blocks.forEach { block ->
             when (block) {
                 is MdBlock.Heading -> {
+                    // 每个块的行内 AnnotatedString 只按 (文本, 样式) 缓存，滚动/字号重组不再重复跑正则
+                    val inline = rememberInline(block.text, bold, code, italic)
                     val hStyle = when (block.level) {
                         1 -> MaterialTheme.typography.titleLarge
                         2 -> MaterialTheme.typography.titleMedium
@@ -149,28 +151,37 @@ fun MarkdownText(
                         }).fontSize * fontScale
                     )
                     Text(
-                        text = buildInline(block.text, bold, code, italic),
+                        text = inline,
                         style = hStyle,
                         modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
                     )
                 }
-                is MdBlock.Paragraph -> Text(
-                    text = buildInline(block.text, bold, code, italic),
-                    style = scaledBody.copy(color = color)
-                )
-                is MdBlock.Bullet -> Row(modifier = Modifier.padding(vertical = 1.dp)) {
-                    Text(text = "• ", style = scaledBody.copy(color = color))
+                is MdBlock.Paragraph -> {
+                    val inline = rememberInline(block.text, bold, code, italic)
                     Text(
-                        text = buildInline(block.text, bold, code, italic),
+                        text = inline,
                         style = scaledBody.copy(color = color)
                     )
                 }
-                is MdBlock.Numbered -> Row(modifier = Modifier.padding(vertical = 1.dp)) {
-                    Text(text = "${block.index}. ", style = scaledBody.copy(color = color, fontWeight = FontWeight.Medium))
-                    Text(
-                        text = buildInline(block.text, bold, code, italic),
-                        style = scaledBody.copy(color = color)
-                    )
+                is MdBlock.Bullet -> {
+                    val inline = rememberInline(block.text, bold, code, italic)
+                    Row(modifier = Modifier.padding(vertical = 1.dp)) {
+                        Text(text = "• ", style = scaledBody.copy(color = color))
+                        Text(
+                            text = inline,
+                            style = scaledBody.copy(color = color)
+                        )
+                    }
+                }
+                is MdBlock.Numbered -> {
+                    val inline = rememberInline(block.text, bold, code, italic)
+                    Row(modifier = Modifier.padding(vertical = 1.dp)) {
+                        Text(text = "${block.index}. ", style = scaledBody.copy(color = color, fontWeight = FontWeight.Medium))
+                        Text(
+                            text = inline,
+                            style = scaledBody.copy(color = color)
+                        )
+                    }
                 }
                 is MdBlock.Code -> {
                     Text(
@@ -191,6 +202,17 @@ fun MarkdownText(
             }
         }
     }
+}
+
+/** 按 (文本, 三个 SpanStyle) 缓存块级行内样式结果，避免重组时重复正则解析。 */
+@Composable
+private fun rememberInline(
+    text: String,
+    bold: SpanStyle,
+    code: SpanStyle,
+    italic: SpanStyle
+): AnnotatedString = remember(text, bold, code, italic) {
+    buildInline(text, bold, code, italic)
 }
 
 /**

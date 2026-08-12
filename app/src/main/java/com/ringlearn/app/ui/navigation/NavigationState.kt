@@ -7,8 +7,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSerializable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.compose.runtime.toMutableStateList
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavEntry
@@ -50,14 +48,6 @@ class NavigationState(
     val backStacks: Map<NavKey, NavBackStack<NavKey>>
 ) {
     var topLevelRoute: NavKey by topLevelRoute
-
-    /** 当前实际参与组合的栈：首页栈 + 当前 Tab 栈（NavDisplay 仅组合当前场景）。 */
-    val stacksInUse: List<NavKey>
-        get() = if (topLevelRoute == startRoute) {
-            listOf(startRoute)
-        } else {
-            listOf(startRoute, topLevelRoute)
-        }
 }
 
 /** 处理导航事件（前进 / 返回），只修改 [NavigationState]。 */
@@ -82,14 +72,6 @@ class Navigator(val state: NavigationState) {
             currentStack.removeLastOrNull()
         }
     }
-}
-
-/** 将导航状态转换为 NavDisplay 需要的条目列表（应用装饰器：状态保存 + ViewModel）。 */
-@Composable
-fun NavigationState.toEntries(
-    entryProvider: (NavKey) -> NavEntry<NavKey>
-): SnapshotStateList<NavEntry<NavKey>> {
-    return toAllEntries(entryProvider).map { it.second }.toMutableStateList()
 }
 
 /**

@@ -79,7 +79,8 @@ class WordRepository @Inject constructor(
             masteredCount = mastered,
             favoriteCount = fav,
             streakDays = computeStreakDays(reviewTimes),
-            newWordCount = (total - mastered).coerceAtLeast(0),
+            // 未学过的词 = 总数 - 已学过(reviewCount>0)；已学过但已到期的词不重复计入新词
+            newWordCount = (total - mastered - due).coerceAtLeast(0),
             isReady = total > 0
         )
     }
@@ -113,17 +114,14 @@ class WordRepository @Inject constructor(
             .toSet()
     }
 
-    fun observeFavorites(query: String): Flow<List<WordEntity>> = wordDao.observeFavorites(query)
+    fun observeFavorites(query: String): Flow<List<WordEntity>> = wordDao.observeFavorites(escapeLike(query))
 
     /** 查词：按 表记/假名/释义 模糊匹配（已做 LIKE 通配符转义） */
-    fun observeLookup(query: String): Flow<List<WordEntity>> = wordDao.observeLookup(query.escapeLike())
-
-    private fun String.escapeLike(): String =
-        replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    fun observeLookup(query: String): Flow<List<WordEntity>> = wordDao.observeLookup(escapeLike(query))
 
     /** IME 转换候选：按假名前缀匹配词库（kana 不含 LIKE 通配符，仍做转义兜底） */
     suspend fun searchCandidates(kana: String): List<WordEntity> =
-        wordDao.getCandidatesByKana(kana.escapeLike())
+        wordDao.getCandidatesByKana(escapeLike(kana))
     suspend fun setFavorite(wordId: Long, favorite: Boolean) {
         val word = wordDao.getWord(wordId) ?: return
         wordDao.update(word.copy(isFavorite = favorite))
@@ -198,6 +196,10 @@ internal fun startOfDay(epochMillis: Long): Long {
     }
     return cal.timeInMillis
 }
+
+/** SQL LIKE 通配符转义（`\` `%` `_`），供查词 / 生词本 / IME 候选查询共用（配合 ESCAPE '\'）。 */
+internal fun escapeLike(query: String): String =
+    query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 

@@ -57,32 +57,12 @@ class QuizViewModel @Inject constructor(
                 // 避免两次 ORDER BY RANDOM() 全表扫描（弱机首访提速）
                 val words = wordRepository.getRandomWords(questionCount * 5)
                 val targets = words.take(questionCount)
-                buildQuestions(targets, words)
+                buildQuizQuestions(targets, words)
             }.onSuccess { questions ->
                 _uiState.value = QuizUiState(isLoading = false, questions = questions)
             }.onFailure { e ->
                 _uiState.update { it.copy(isLoading = false, error = e.message ?: "加载题目失败") }
             }
-        }
-    }
-
-    private fun buildQuestions(
-        targets: List<WordEntity>,
-        pool: List<WordEntity>
-    ): List<QuizQuestion> {
-        val targetIds = targets.mapTo(mutableSetOf()) { it.id }
-        val distractorPool = pool
-            .filter { it.id !in targetIds }
-            .map { it.meaning }
-            .distinct()
-        return targets.map { target ->
-            val wrong = distractorPool.filter { it != target.meaning }.shuffled().take(3)
-            val options = (listOf(target.meaning) + wrong).shuffled()
-            QuizQuestion(
-                word = target,
-                options = options,
-                correctIndex = options.indexOf(target.meaning)
-            )
         }
     }
 
@@ -114,5 +94,39 @@ class QuizViewModel @Inject constructor(
 
     fun consumeError() {
         _uiState.update { it.copy(error = null) }
+    }
+}
+
+/**
+ * 组装测验题目（纯逻辑，可单测）：
+ * 干扰项优先取非目标词释义；不足 3 个时用目标词释义补足（仍排除当前题正确答案），
+ * 保证正常词库下恒有 3 个干扰项；极端词库（释义极少/空池）优雅降级为可用数量。
+ * [correctIndex] 始终指向目标释义。
+ */
+internal fun buildQuizQuestions(
+    targets: List<WordEntity>,
+    pool: List<WordEntity>
+): List<QuizQuestion> {
+    val targetIds = targets.mapTo(mutableSetOf()) { it.id }
+    val nonTargetMeanings = pool
+        .filter { it.id !in targetIds }
+        .map { it.meaning }
+        .distinct()
+    val targetMeanings = pool
+        .filter { it.id in targetIds }
+        .map { it.meaning }
+        .distinct()
+    return targets.map { target ->
+        val wrong = (nonTargetMeanings + targetMeanings)
+            .filter { it != target.meaning }
+            .distinct()
+            .shuffled()
+            .take(3)
+        val options = (listOf(target.meaning) + wrong).shuffled()
+        QuizQuestion(
+            word = target,
+            options = options,
+            correctIndex = options.indexOf(target.meaning)
+        )
     }
 }

@@ -148,6 +148,11 @@ fun rememberRingLearnImeState(
         RingLearnImeState(
             state = state,
             engine = RomajiEngine(),
+            // 内置键盘模式：拦截系统文本输入会话（不连接 IME → 系统键盘不弹出，由应用内键盘独占输入）。
+            // 取舍说明（2026-08 审查）：曾尝试「放行长按粘贴」——但 PlatformTextInputInterceptor 仅有
+            // interceptStartInputMethod 一个入口，收到剪贴板粘贴的唯一方式是 session.startInputMethod()
+            // 连接 IME，而连接必然弹出系统键盘（双重键盘 + 输入漂移）。API 无法区分「粘贴提交」与
+            // 「按键提交」，故保持拦截；需要粘贴时用户可一键切到系统输入法模式（⌨ 键）。
             blockingInterceptor = PlatformTextInputInterceptor { _, _ -> awaitCancellation() },
             onSwitchToSystemIme = { currentSwitchToSystemIme() },
             onCompositionChange = { composing, kana -> currentCompositionChange(composing, kana) },

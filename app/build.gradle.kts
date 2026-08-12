@@ -64,6 +64,11 @@ kotlin {
     }
 }
 
+ksp {
+    // Room schema 导出到 app/schemas（随仓库提交，供迁移测试与 schema 校验）
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)

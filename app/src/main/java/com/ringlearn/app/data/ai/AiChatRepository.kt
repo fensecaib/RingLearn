@@ -5,10 +5,12 @@ import com.ringlearn.app.data.local.entity.AiChatEntity
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * AI 对话仓库：消息持久化（Room）+ 请求组装（system 提示词固定于首条，完整历史随请求携带，不做压缩）。
@@ -93,13 +95,17 @@ class AiChatRepository @Inject constructor(
                 }
             }
         } catch (e: CancellationException) {
-            dao.update(
-                AiChatEntity(
-                    id = assistantId, sessionId = sessionId, role = "assistant",
-                    content = sb.toString().ifEmpty { "已停止生成" },
-                    createdAt = now, isError = true
+            // 协程已取消：Room suspend DAO 的挂起点会立即再次抛 CancellationException，
+            // 必须用 NonCancellable 保证「已停止生成/已接收部分文本」落库，否则 UI 显示空白错误行。
+            withContext(NonCancellable) {
+                dao.update(
+                    AiChatEntity(
+                        id = assistantId, sessionId = sessionId, role = "assistant",
+                        content = sb.toString().ifEmpty { "已停止生成" },
+                        createdAt = now, isError = true
+                    )
                 )
-            )
+            }
             throw e
         }
         val finalText = sb.toString()
