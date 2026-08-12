@@ -22,7 +22,7 @@ $env:JAVA_HOME='D:\Apps\Android Studio\jbr'
 adb -s 01772412127937 install -r app\build\outputs\apk\debug\app-debug.apk
 ```
 
-- 单测共 **68 个**，改动后必须全绿；Gradle 输出偶被吞时用 `*> build_out.txt` 重定向查看。
+- 单测共 **79 个**，改动后必须全绿；Gradle 输出偶被吞时用 `*> build_out.txt` 重定向查看。
 - 测试类 FQCN（供 `--tests` 过滤）：
   - `com.ringlearn.app.domain.ime.RomajiEngineTest`（18 个，核心）
   - `com.ringlearn.app.domain.algorithm.Sm2SchedulerTest`（6 个）
@@ -93,7 +93,7 @@ adb -s 01772412127937 install -r app\build\outputs\apk\debug\app-debug.apk
 - 提交 `sk-*` API Key、Keystore 密文、`.codex/`、构建产物与日志。
 - 改回「移除底栏 + 页内键盘」；改回 `keyboardHeightPx - dockHeightPx` 推导。
 - 引入 GMS / ML Kit 依赖（真机无 Play services）。
-- 主线程 `runBlocking`；破坏 68 个单测的全绿状态。
+- 主线程 `runBlocking`；破坏 79 个单测的全绿状态。
 
 ## 8. 安全（Security）
 
