@@ -305,7 +305,7 @@ fun AiChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     // 内置键盘弹出时抬升到键盘（含候选栏）正上方，避免遮挡输入框
-                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = if (imeActive) contentOverflowDp else 8.dp),
+                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = if (imeActive) contentOverflowDp + 6.dp else 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 RingLearnImeField(
@@ -804,4 +804,3 @@ private fun AiSettingsDialog(
         }
     )
 }
-

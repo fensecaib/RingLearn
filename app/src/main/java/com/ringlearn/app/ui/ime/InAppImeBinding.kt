@@ -33,9 +33,14 @@ fun InAppImeBinding(
     }
 }
 
-/** 键盘覆盖高度超出底栏的部分（dp），用于列表滚动让出键盘区。 */
+/**
+ * 键盘覆盖层顶部超出页面内容底边的部分（dp）：lift = pageContentBottomPx - overlayTopPx（同一根坐标系实测），
+ * 使输入行/列表底边恰好停在键盘覆盖层顶边之上。组合期读取两个状态即订阅其变化。
+ */
 @Composable
 fun InAppImeController.contentOverflowDp(): Dp {
     val density = LocalDensity.current
-    return with(density) { contentOverflowPx.coerceAtLeast(0).toDp() }
+    return with(density) {
+        (pageContentBottomPx - overlayTopPx).coerceAtLeast(0).toDp()
+    }
 }

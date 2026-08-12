@@ -1,10 +1,8 @@
 package com.ringlearn.app.ui.ime
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,8 +44,8 @@ fun CandidateBar(
     AnimatedVisibility(
         visible = candidates.isNotEmpty(),
         modifier = modifier,
-        enter = expandVertically() + fadeIn(),
-        exit = shrinkVertically() + fadeOut()
+        enter = fadeIn(),
+        exit = fadeOut()
     ) {
         Row(
             modifier = Modifier

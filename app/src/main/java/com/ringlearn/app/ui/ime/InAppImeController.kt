@@ -1,10 +1,12 @@
 package com.ringlearn.app.ui.ime
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -16,9 +18,12 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onSizeChanged
 import com.ringlearn.app.data.local.entity.WordEntity
 import com.ringlearn.app.ui.rememberHapticManager
+import kotlin.math.roundToInt
 
 /**
  * 内置键盘覆盖层控制器：由查词/生词本页在键盘激活时绑定，根层 [InAppKeyboardOverlay] 读取并渲染。
@@ -36,8 +41,11 @@ class InAppImeController {
     /** 键盘覆盖层实测高度（px，含导航栏 padding；键盘常驻组合，测量稳定） */
     var keyboardHeightPx by mutableIntStateOf(0)
 
-    /** 键盘覆盖高度超出底栏的部分（px），供页面列表滚动让出键盘区 */
-    var contentOverflowPx by mutableIntStateOf(0)
+    /** 页面内容底边在根坐标系中的 y（px）：由根层 nav host onGloballyPositioned 实测。 */
+    var pageContentBottomPx by mutableIntStateOf(0)
+
+    /** 键盘覆盖层顶边在根坐标系中的 y（px）：由覆盖层 Column onGloballyPositioned 实测（可见位置）。 */
+    var overlayTopPx by mutableIntStateOf(0)
 }
 
 val LocalInAppImeController = staticCompositionLocalOf<InAppImeController> {
@@ -74,8 +82,10 @@ fun InAppKeyboardOverlay(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
                     .navigationBarsPadding()
                     .onSizeChanged { controller.keyboardHeightPx = it.height }
+                    .onGloballyPositioned { coords -> controller.overlayTopPx = coords.positionInRoot().y.roundToInt() }
                     .graphicsLayer {
                         translationY = if (visible) 0f else controller.keyboardHeightPx.toFloat()
                     }
@@ -97,3 +107,11 @@ fun InAppKeyboardOverlay(
         }
     }
 }
+
+
+
+
+
+
+
+

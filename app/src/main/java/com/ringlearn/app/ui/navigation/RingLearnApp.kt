@@ -1,5 +1,6 @@
 package com.ringlearn.app.ui.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -13,16 +14,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.res.painterResource
-import androidx.activity.compose.BackHandler
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavKey
@@ -40,6 +38,7 @@ import com.ringlearn.app.ui.lookup.LookupScreen
 import com.ringlearn.app.ui.quiz.QuizScreen
 import com.ringlearn.app.ui.study.StudyScreen
 import com.ringlearn.app.ui.wordbook.WordBookScreen
+import kotlin.math.roundToInt
 import kotlinx.serialization.Serializable
 
 @Serializable data object HomeKey : NavKey
@@ -73,6 +72,8 @@ private val bottomDestinations = listOf(
  *   杜绝「底栏移除→重现」的视觉抖动。
  * - 键盘常驻组合 + graphicsLayer 位移切换（开/关不重新组成/重测量），
  *   键盘由页面点击输入框才弹出（默认收起），不自动弹出。
+ * - 输入行/列表抬升量 = 页面内容底（nav host 实测）− 键盘覆盖层顶（Column 实测），
+ *   两者同用 positionInRoot 坐标系，构造上精确，消除 inset/padding 推导误差。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -90,16 +91,6 @@ fun RingLearnApp() {
     // 因此仅当处于系统输入法模式（!useInAppKeyboard）时才据此隐藏底栏。
     val systemImeVisible = WindowInsets.isImeVisible
     val hideDock = systemImeVisible && !useInAppKeyboard
-
-    // 底栏实测高度（含系统导航栏 inset）
-    var dockHeightPx by remember { mutableIntStateOf(0) }
-
-    // 订阅键盘实测高度：高度变化（开合/五十音/候选栏）时重算 contentOverflowPx，
-    // 供页面输入行/列表让出键盘区（SideEffect 内读不订阅，须在组合期读取触发重组）
-    val keyboardHeightPx = inAppImeController.keyboardHeightPx
-    SideEffect {
-        inAppImeController.contentOverflowPx = (keyboardHeightPx - dockHeightPx).coerceAtLeast(0)
-    }
 
     // 稳定 entryProvider 身份：避免根重组重建全部 NavEntry 导致页面整树重组合
     val entryProvider = remember {
@@ -150,9 +141,7 @@ fun RingLearnApp() {
                     // 底栏常驻：仅在系统输入法模式下系统键盘可见时隐藏（被系统键盘盖住）；
                     // 内置键盘场景从不移除底栏（由覆盖层盖住）
                     if (!hideDock) {
-                        NavigationBar(
-                            modifier = Modifier.onSizeChanged { dockHeightPx = it.height }
-                        ) {
+                        NavigationBar() {
                             bottomDestinations.forEach { destination ->
                                 val selected = destination.key == navigationState.topLevelRoute
                                 NavigationBarItem(
@@ -171,11 +160,16 @@ fun RingLearnApp() {
                     }
                 }
             ) { padding ->
-                // 常驻 Tab 宿主：首访后保持组合，切换仅变 alpha，消灭重复切换的整树重组合开销
+                // 页面内容底边（根坐标系 y）：实测 nav host 底部，供三页计算输入行/列表抬升量
+                // lift = pageContentBottomPx - overlayTopPx（与覆盖层 Column 同一坐标系）
                 KeepAliveNavHost(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(padding),
+                        .padding(padding)
+                        .onGloballyPositioned { coords ->
+                            inAppImeController.pageContentBottomPx =
+                                (coords.positionInRoot().y + coords.size.height).roundToInt()
+                        },
                     entries = navigationState.toAllEntries(entryProvider),
                     topLevelRoute = navigationState.topLevelRoute,
                     initialRoute = HomeKey
@@ -188,5 +182,3 @@ fun RingLearnApp() {
         }
     }
 }
-
-
