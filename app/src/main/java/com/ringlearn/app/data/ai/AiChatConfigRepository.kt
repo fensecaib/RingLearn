@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -35,6 +36,7 @@ class AiChatConfigRepository @Inject constructor(
         val MAX_TOKENS = intPreferencesKey("ai_max_tokens")
         val SYSTEM_PROMPT = stringPreferencesKey("ai_system_prompt")
         val THINKING_ENABLED = booleanPreferencesKey("ai_thinking_enabled")
+        val CHAT_FONT_SCALE = floatPreferencesKey("ai_chat_font_scale")
     }
 
     val config: Flow<AiChatConfig> = context.aiConfigDataStore.data
@@ -49,7 +51,8 @@ class AiChatConfigRepository @Inject constructor(
                 model = p[Keys.MODEL] ?: DEFAULT_MODEL,
                 maxTokens = (p[Keys.MAX_TOKENS] ?: DEFAULT_MAX_TOKENS).coerceIn(128, 8192),
                 systemPrompt = p[Keys.SYSTEM_PROMPT] ?: DEFAULT_SYSTEM_PROMPT,
-                thinkingEnabled = p[Keys.THINKING_ENABLED] ?: false
+                thinkingEnabled = p[Keys.THINKING_ENABLED] ?: false,
+                chatFontScale = (p[Keys.CHAT_FONT_SCALE] ?: 1f).coerceIn(0.85f, 1.3f)
             )
         }
 
@@ -59,7 +62,8 @@ class AiChatConfigRepository @Inject constructor(
         model: String = DEFAULT_MODEL,
         maxTokens: Int = DEFAULT_MAX_TOKENS,
         systemPrompt: String = DEFAULT_SYSTEM_PROMPT,
-        thinkingEnabled: Boolean = false
+        thinkingEnabled: Boolean = false,
+        chatFontScale: Float = 1f
     ) {
         context.aiConfigDataStore.edit { p ->
             p[Keys.BASE_URL] = baseUrl.trim().ifBlank { DEFAULT_BASE_URL }
@@ -72,6 +76,7 @@ class AiChatConfigRepository @Inject constructor(
             p[Keys.MAX_TOKENS] = maxTokens.coerceIn(128, 8192)
             p[Keys.SYSTEM_PROMPT] = systemPrompt.trim().ifBlank { DEFAULT_SYSTEM_PROMPT }
             p[Keys.THINKING_ENABLED] = thinkingEnabled
+            p[Keys.CHAT_FONT_SCALE] = chatFontScale.coerceIn(0.85f, 1.3f)
         }
     }
 }

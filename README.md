@@ -263,6 +263,9 @@ dueAt = now + interval * 24h
   - 流式增量只重组最后一条气泡（`StreamingBubble` 内部订阅 `streamingText`，消除整屏重组）；
   - 流式期间用 `InlineMarkdownText` 轻量渲染（加粗/行内代码/斜体实时可见），完成后切换完整 Markdown 排版。
   - 效果：流式期 UI 线程帧耗时 p95 ≈ 2.5ms（framestats 实测），GPU ≈ 5ms；gfxinfo 高 janky% 多为稀疏更新帧的 vsync 错位度量伪影。
+- **历史懒加载 + 即时滚动**：进入页面只加载最近 40 条并瞬时滚动到底（取消长距离滚动动画），上滑到顶部自动加载更早历史（`ChatHistoryWindow` 分页窗口，全量上下文统计不受影响）；超长已完成的助手消息默认截断展示、可「展开全文」，控制单气泡首绘成本。
+- **字号调整**：AI 设置对话框新增 A-/A+/重置（0.85–1.3，持久化到 DataStore），气泡正文/标题/代码块同比例缩放（`LocalChatFontScale`）。
+- **回到顶部/底部**：聊天区右下角浮动 ↑/↓ 圆钮，按需显示；顶部栏精简为「标题 + 上下文徽章 + ⋮」（设置/重置收进菜单）。
 - **深度思考开关**：DeepSeek V4 默认开启思考模式，可能把 `max_tokens` 全耗在 `reasoning_content` 上导致 `content` 为空（`finish_reason=length`）；
   应用默认在请求中携带 `thinking:{"type":"disabled"}`（设置页可开启「深度思考」），保证必出可见内容、响应更快。
 ## 6. 性能优化与真机测量（2026-08）

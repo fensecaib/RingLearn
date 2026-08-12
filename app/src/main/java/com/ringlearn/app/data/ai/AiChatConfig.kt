@@ -16,7 +16,9 @@ data class AiChatConfig(
      * 是否开启 DeepSeek 深度思考（reasoning）模式。默认关闭：V4 默认思考开启且可能把 max_tokens 全耗在
      * reasoning_content 上导致 content 为空（finish_reason=length）；关闭后必出可见内容、响应更快。
      */
-    val thinkingEnabled: Boolean = false
+    val thinkingEnabled: Boolean = false,
+    /** 对话气泡字号缩放（0.85–1.3，默认 1.0；设置页可调，持久化） */
+    val chatFontScale: Float = 1f
 ) {
     val isConfigured: Boolean get() = apiKey.isNotBlank() && baseUrl.isNotBlank() && model.isNotBlank()
 }

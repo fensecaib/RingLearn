@@ -38,12 +38,19 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -56,6 +63,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -71,6 +79,8 @@ import com.ringlearn.app.ui.ime.RingLearnImeField
 import com.ringlearn.app.ui.ime.contentOverflowDp
 import com.ringlearn.app.ui.ime.rememberRingLearnImeState
 import com.ringlearn.app.ui.rememberHapticManager
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 /** AI 对话页：聊天气泡 + 内置键盘/系统输入法 + 上下文统计徽章 + 设置/重置。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,6 +99,9 @@ fun AiChatScreen(
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showResetConfirm by rememberSaveable { mutableStateOf(false) }
     var showContextInfo by rememberSaveable { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val hasMoreOlder by viewModel.hasMoreOlder.collectAsStateWithLifecycle()
 
     val textFieldState = remember { TextFieldState() }
     var keyboardVisible by rememberSaveable { mutableStateOf(false) }
@@ -97,9 +110,25 @@ fun AiChatScreen(
         keyboardVisible = false
     }
 
-    // 新消息出现时滚动到底部
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+    // 滚动到底：仅首次加载/新消息追加（末条 id 变化）时瞬时滚动；上滑加载更早不触发
+    var lastBottomId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(messages.lastOrNull()?.id) {
+        val last = messages.lastOrNull() ?: return@LaunchedEffect
+        if (lastBottomId == null || last.id != lastBottomId) {
+            val isInitial = lastBottomId == null
+            val info = listState.layoutInfo
+            // 首次加载始终回到底部；新消息仅在用户原本靠近底部时跟随
+            val nearBottom = isInitial || info.totalItemsCount == 0 ||
+                ((info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= info.totalItemsCount - 3)
+            if (nearBottom) listState.scrollToItem(messages.size - 1)
+        }
+        lastBottomId = last.id
+    }
+    // 上滑到顶部自动加载更早历史（无限滚动，每页触发一次）
+    LaunchedEffect(Unit) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .collect { idx -> if (idx <= 1 && hasMoreOlder) viewModel.loadOlder() }
     }
 
     // 发送：读取输入框文本并清空
@@ -112,6 +141,7 @@ fun AiChatScreen(
         }
     }
 
+    CompositionLocalProvider(LocalChatFontScale provides config.chatFontScale) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0),
@@ -126,23 +156,43 @@ fun AiChatScreen(
                             showContextInfo = !showContextInfo
                         }
                     )
-                    IconButton(onClick = {
-                        haptic.click()
-                        showSettings = true
-                    }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_settings),
-                            contentDescription = "AI 设置"
-                        )
-                    }
-                    IconButton(onClick = {
-                        haptic.click()
-                        showResetConfirm = true
-                    }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_delete),
-                            contentDescription = "重置会话"
-                        )
+                    Box {
+                        IconButton(onClick = {
+                            haptic.click()
+                            menuExpanded = true
+                        }) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_more_vert),
+                                contentDescription = "更多"
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("AI 设置") },
+                                leadingIcon = {
+                                    Icon(painterResource(R.drawable.ic_settings), contentDescription = null)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    haptic.click()
+                                    showSettings = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("重置会话") },
+                                leadingIcon = {
+                                    Icon(painterResource(R.drawable.ic_delete), contentDescription = null)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    haptic.click()
+                                    showResetConfirm = true
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -196,6 +246,9 @@ fun AiChatScreen(
                             bottom = 12.dp + if (imeActive) contentOverflowDp else 0.dp
                         )
                     ) {
+                        if (hasMoreOlder) {
+                            item(key = "load_older") { LoadMoreItem() }
+                        }
                         val lastId = messages.lastOrNull()?.id
                         items(messages, key = { it.id }) { msg ->
                             if (msg.id == lastId) {
@@ -213,6 +266,32 @@ fun AiChatScreen(
                                 )
                             }
                         }
+                    }
+                }
+                // 浮动回到顶部/底部圆钮（按需显示，不占常驻空间）
+                val atBottom by remember { derivedStateOf {
+                    val info = listState.layoutInfo
+                    info.totalItemsCount == 0 ||
+                        ((info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= info.totalItemsCount - 2)
+                } }
+                val scrolledDown by remember { derivedStateOf { listState.firstVisibleItemIndex > 2 } }
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (scrolledDown) {
+                        SmallFloatingActionButton(onClick = {
+                            haptic.click()
+                            scope.launch { listState.animateScrollToItem(0) }
+                        }) { Text("↑", style = MaterialTheme.typography.titleMedium) }
+                    }
+                    if (!atBottom) {
+                        SmallFloatingActionButton(onClick = {
+                            haptic.click()
+                            scope.launch { listState.scrollToItem(messages.size - 1) }
+                        }) { Text("↓", style = MaterialTheme.typography.titleMedium) }
                     }
                 }
             }
@@ -264,15 +343,16 @@ fun AiChatScreen(
             }
         }
     }
+    }
 
     if (showSettings) {
         AiSettingsDialog(
             config = config,
             onTest = viewModel::testConnection,
             onDismiss = { showSettings = false },
-            onSave = { baseUrl, apiKey, model, maxTokens, systemPrompt, thinkingEnabled ->
+            onSave = { baseUrl, apiKey, model, maxTokens, systemPrompt, thinkingEnabled, chatFontScale ->
                 haptic.click()
-                viewModel.updateConfig(baseUrl, apiKey, model, maxTokens, systemPrompt, thinkingEnabled)
+                viewModel.updateConfig(baseUrl, apiKey, model, maxTokens, systemPrompt, thinkingEnabled, chatFontScale)
                 showSettings = false
             }
         )
@@ -296,6 +376,29 @@ fun AiChatScreen(
     }
 }
 
+/** 列表顶部「加载更早消息」占位（hasMoreOlder 时显示，上滑到顶部自动触发加载）。 */
+@Composable
+private fun LoadMoreItem() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 2.dp
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "加载更早消息…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
 /** 上下文统计状态徽章：N 轮 · M chars，点击展开说明。内部订阅 contextStats（仅徽章随流式增量重组）。 */
 @Composable
 private fun ContextBadge(
@@ -409,7 +512,7 @@ private fun ChatBubble(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
         Column(
@@ -417,9 +520,15 @@ private fun ChatBubble(
                 .fillMaxWidth(if (isUser) 0.85f else 1f)
                 .clip(RoundedCornerShape(16.dp))
                 .background(container)
-                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            val text = liveText ?: message.content
+            val fullText = liveText ?: message.content
+            // 超长已完成的助手消息默认截断展示，控制单气泡首绘成本（用户可「展开全文」）
+            val isStreaming = liveText != null
+            var expanded by remember(message.id) { mutableStateOf(false) }
+            val MAX_DISPLAY_CHARS = 1000
+            val truncated = !isStreaming && !expanded && fullText.length > MAX_DISPLAY_CHARS
+            val text = if (truncated) fullText.take(MAX_DISPLAY_CHARS) + "…" else fullText
             when {
                 liveText != null && liveText.isEmpty() -> {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -437,7 +546,9 @@ private fun ChatBubble(
                 }
                 isUser -> Text(
                     text = text,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = MaterialTheme.typography.bodyLarge.fontSize * LocalChatFontScale.current
+                    ),
                     color = contentColor
                 )
                 else -> if (liveText != null) {
@@ -455,6 +566,11 @@ private fun ChatBubble(
                     )
                 }
             }
+            if (truncated) {
+                TextButton(onClick = { expanded = true }, modifier = Modifier.padding(top = 2.dp)) {
+                    Text("展开全文")
+                }
+            }
             if (isError) {
                 TextButton(onClick = onRetry, modifier = Modifier.padding(top = 4.dp)) {
                     Text("重试")
@@ -470,7 +586,7 @@ private fun AiSettingsDialog(
     config: AiChatConfig,
     onTest: (AiChatConfig, (Result<String>) -> Unit) -> Unit,
     onDismiss: () -> Unit,
-    onSave: (baseUrl: String, apiKey: String, model: String, maxTokens: Int, systemPrompt: String, thinkingEnabled: Boolean) -> Unit
+    onSave: (baseUrl: String, apiKey: String, model: String, maxTokens: Int, systemPrompt: String, thinkingEnabled: Boolean, chatFontScale: Float) -> Unit
 ) {
     var baseUrl by remember { mutableStateOf(config.baseUrl) }
     var apiKey by remember { mutableStateOf(config.apiKey) }
@@ -478,6 +594,7 @@ private fun AiSettingsDialog(
     var maxTokens by remember { mutableStateOf(config.maxTokens.toString()) }
     var systemPrompt by remember { mutableStateOf(config.systemPrompt) }
     var thinkingEnabled by remember { mutableStateOf(config.thinkingEnabled) }
+    var chatFontScale by remember { mutableStateOf(config.chatFontScale) }
     var presetName by remember {
         mutableStateOf(SYSTEM_PROMPT_PRESETS.firstOrNull { it.second == config.systemPrompt }?.first ?: "自定义")
     }
@@ -545,6 +662,35 @@ private fun AiSettingsDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "字号",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = { chatFontScale = (chatFontScale - 0.05f).coerceAtLeast(0.85f) },
+                        enabled = chatFontScale > 0.85f
+                    ) { Text("A-") }
+                    Text(
+                        text = "${(chatFontScale * 100).toInt()}%",
+                        style = MaterialTheme.typography.titleSmall,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedButton(
+                        onClick = { chatFontScale = (chatFontScale + 0.05f).coerceAtMost(1.3f) },
+                        enabled = chatFontScale < 1.3f
+                    ) { Text("A+") }
+                    OutlinedButton(
+                        onClick = { chatFontScale = 1f }
+                    ) { Text("重置") }
+                }
                 Spacer(Modifier.height(12.dp))
                 // 深度思考开关：默认关闭（V4 思考模式可能把 max_tokens 全耗在 reasoning 上导致空回复）
                 Row(
@@ -643,7 +789,7 @@ private fun AiSettingsDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onSave(baseUrl.trim(), apiKey.trim(), model.trim(), maxTokensInt, systemPrompt.trim(), thinkingEnabled)
+                    onSave(baseUrl.trim(), apiKey.trim(), model.trim(), maxTokensInt, systemPrompt.trim(), thinkingEnabled, chatFontScale)
                 }
             ) { Text("保存") }
         },

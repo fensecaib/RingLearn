@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** AI 对话页 ViewModel：消息/配置/发送/停止/重试/重置/连接测试。 */
 @HiltViewModel
@@ -26,8 +28,44 @@ class AiChatViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    val messages: StateFlow<List<AiChatEntity>> = repository.observeMessages(SESSION_ID)
+    /** 全量历史（用于窗口同步与全量上下文统计；内存开销小，仅组合量按页控制） */
+    private val fullMessages: StateFlow<List<AiChatEntity>> = repository.observeMessages(SESSION_ID)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val window = ChatHistoryWindow()
+    private val _messages = MutableStateFlow<List<AiChatEntity>>(emptyList())
+    /** 当前显示的消息窗口（最近一页 + 已上滑加载的更早消息） */
+    val messages: StateFlow<List<AiChatEntity>> = _messages
+
+    private val _hasMoreOlder = MutableStateFlow(false)
+    /** 是否还有更早的历史可加载 */
+    val hasMoreOlder: StateFlow<Boolean> = _hasMoreOlder
+
+    private val loadMutex = Mutex()
+
+    init {
+        // 全量变化（新消息追加/重置清空）时同步窗口回到最近一页
+        viewModelScope.launch {
+            fullMessages.collect { full ->
+                window.sync(full)
+                _messages.value = window.items
+                _hasMoreOlder.value = window.hasMoreOlder
+            }
+        }
+    }
+
+    /** 上滑到顶部时加载更早一页（防重入）。 */
+    fun loadOlder() {
+        viewModelScope.launch {
+            loadMutex.withLock {
+                if (!_hasMoreOlder.value) return@withLock
+                if (window.appendOlder(fullMessages.value)) {
+                    _messages.value = window.items
+                    _hasMoreOlder.value = window.hasMoreOlder
+                }
+            }
+        }
+    }
 
     val config: StateFlow<AiChatConfig> = configRepository.config
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AiChatConfig())
@@ -44,7 +82,7 @@ class AiChatViewModel @Inject constructor(
     val streamingText: StateFlow<String?> = _streamingText
 
     /** 上下文统计：轮数 + 字符数 */
-    val contextStats: StateFlow<ContextStats> = combine(messages, streamingText) { msgs, stream ->
+    val contextStats: StateFlow<ContextStats> = combine(fullMessages, streamingText) { msgs, stream ->
         ContextStats(
             rounds = msgs.count { it.role == "user" },
             chars = msgs.sumOf { it.content.length } + (stream?.length ?: 0)
@@ -101,7 +139,8 @@ class AiChatViewModel @Inject constructor(
         model: String,
         maxTokens: Int,
         systemPrompt: String,
-        thinkingEnabled: Boolean
+        thinkingEnabled: Boolean,
+        chatFontScale: Float
     ) {
         viewModelScope.launch {
             configRepository.update(
@@ -110,7 +149,8 @@ class AiChatViewModel @Inject constructor(
                 model = model,
                 maxTokens = maxTokens,
                 systemPrompt = systemPrompt,
-                thinkingEnabled = thinkingEnabled
+                thinkingEnabled = thinkingEnabled,
+                chatFontScale = chatFontScale
             )
         }
     }

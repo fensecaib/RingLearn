@@ -15,11 +15,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 
@@ -105,37 +105,9 @@ internal fun buildInline(
 }
 
 /**
- * 流式轻量渲染：单个 Text + 行内样式（加粗/行内代码/斜体实时可见），
- * 不做块级布局（标题/列表/代码块）——弱机流式期长文本重渲染的主线程瓶颈所在；
- * 流式完成后由 [MarkdownText] 渲染完整排版。
+ * 聊天气泡内 Markdown 渲染（自绘，无第三方库）。
+ * 字号随 [LocalChatFontScale] 缩放（正文/标题/代码块同比例）。
  */
-@Composable
-fun InlineMarkdownText(
-    text: String,
-    modifier: Modifier = Modifier,
-    style: TextStyle = MaterialTheme.typography.bodyMedium,
-    color: Color = MaterialTheme.colorScheme.onSurface
-) {
-    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
-    val primary = MaterialTheme.colorScheme.primary
-    val (bold, code, italic) = remember(style, color, surfaceContainerHigh, primary) {
-        Triple(
-            style.toSpanStyle().copy(fontWeight = FontWeight.Bold),
-            style.toSpanStyle().copy(
-                fontFamily = FontFamily.Monospace,
-                background = surfaceContainerHigh,
-                color = primary
-            ),
-            style.toSpanStyle().copy(fontStyle = FontStyle.Italic)
-        )
-    }
-    Text(
-        text = buildInline(text, bold, code, italic),
-        style = style.copy(color = color),
-        modifier = modifier
-    )
-}
-/** 聊天气泡内 Markdown 渲染（自绘，无第三方库）。 */
 @Composable
 fun MarkdownText(
     text: String,
@@ -143,18 +115,20 @@ fun MarkdownText(
     style: TextStyle = MaterialTheme.typography.bodyMedium,
     color: Color = MaterialTheme.colorScheme.onSurface
 ) {
+    val fontScale = LocalChatFontScale.current
     val blocks = remember(text) { parseMarkdown(text) }
+    val scaledBody = style.copy(fontSize = style.fontSize * fontScale)
     val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
     val primary = MaterialTheme.colorScheme.primary
-    val (bold, code, italic) = remember(style, color, surfaceContainerHigh, primary) {
+    val (bold, code, italic) = remember(style, color, surfaceContainerHigh, primary, fontScale) {
         Triple(
-            style.toSpanStyle().copy(fontWeight = FontWeight.Bold),
-            style.toSpanStyle().copy(
+            scaledBody.toSpanStyle().copy(fontWeight = FontWeight.Bold),
+            scaledBody.toSpanStyle().copy(
                 fontFamily = FontFamily.Monospace,
                 background = surfaceContainerHigh,
                 color = primary
             ),
-            style.toSpanStyle().copy(fontStyle = FontStyle.Italic)
+            scaledBody.toSpanStyle().copy(fontStyle = FontStyle.Italic)
         )
     }
     Column(modifier = modifier.fillMaxWidth()) {
@@ -165,7 +139,15 @@ fun MarkdownText(
                         1 -> MaterialTheme.typography.titleLarge
                         2 -> MaterialTheme.typography.titleMedium
                         else -> MaterialTheme.typography.titleSmall
-                    }.copy(color = color, fontWeight = FontWeight.Bold)
+                    }.copy(
+                        color = color,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = (when (block.level) {
+                            1 -> MaterialTheme.typography.titleLarge
+                            2 -> MaterialTheme.typography.titleMedium
+                            else -> MaterialTheme.typography.titleSmall
+                        }).fontSize * fontScale
+                    )
                     Text(
                         text = buildInline(block.text, bold, code, italic),
                         style = hStyle,
@@ -174,26 +156,27 @@ fun MarkdownText(
                 }
                 is MdBlock.Paragraph -> Text(
                     text = buildInline(block.text, bold, code, italic),
-                    style = style.copy(color = color)
+                    style = scaledBody.copy(color = color)
                 )
                 is MdBlock.Bullet -> Row(modifier = Modifier.padding(vertical = 1.dp)) {
-                    Text(text = "• ", style = style.copy(color = color))
+                    Text(text = "• ", style = scaledBody.copy(color = color))
                     Text(
                         text = buildInline(block.text, bold, code, italic),
-                        style = style.copy(color = color)
+                        style = scaledBody.copy(color = color)
                     )
                 }
                 is MdBlock.Numbered -> Row(modifier = Modifier.padding(vertical = 1.dp)) {
-                    Text(text = "${block.index}. ", style = style.copy(color = color, fontWeight = FontWeight.Medium))
+                    Text(text = "${block.index}. ", style = scaledBody.copy(color = color, fontWeight = FontWeight.Medium))
                     Text(
                         text = buildInline(block.text, bold, code, italic),
-                        style = style.copy(color = color)
+                        style = scaledBody.copy(color = color)
                     )
                 }
                 is MdBlock.Code -> {
                     Text(
                         text = block.code,
                         style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize * fontScale,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurface
                         ),
@@ -210,4 +193,35 @@ fun MarkdownText(
     }
 }
 
-
+/**
+ * 流式轻量渲染：单个 Text + 行内样式（加粗/行内代码/斜体实时可见），
+ * 不做块级布局——弱机流式期长文本重渲染的主线程瓶颈所在；流式完成后由 [MarkdownText] 渲染完整排版。
+ */
+@Composable
+fun InlineMarkdownText(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodyMedium,
+    color: Color = MaterialTheme.colorScheme.onSurface
+) {
+    val fontScale = LocalChatFontScale.current
+    val scaledBody = style.copy(fontSize = style.fontSize * fontScale)
+    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
+    val primary = MaterialTheme.colorScheme.primary
+    val (bold, code, italic) = remember(style, color, surfaceContainerHigh, primary, fontScale) {
+        Triple(
+            scaledBody.toSpanStyle().copy(fontWeight = FontWeight.Bold),
+            scaledBody.toSpanStyle().copy(
+                fontFamily = FontFamily.Monospace,
+                background = surfaceContainerHigh,
+                color = primary
+            ),
+            scaledBody.toSpanStyle().copy(fontStyle = FontStyle.Italic)
+        )
+    }
+    Text(
+        text = buildInline(text, bold, code, italic),
+        style = scaledBody.copy(color = color),
+        modifier = modifier
+    )
+}
