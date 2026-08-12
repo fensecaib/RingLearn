@@ -63,7 +63,7 @@ adb -s 01772412127937 install -r app\build\outputs\apk\debug\app-debug.apk
 ## 5. 真机测试与工具
 
 - 设备 `01772412127937`（720x1440 / density 320 / Android 12 / 无 GMS），另有 `01772412127998`——**多设备务必 `adb -s`**。
-- 项目内 `.codex/skills/`（**已 gitignore，仅本地**）沉淀 5 个测试/调试 skill：`ringlearn-device-test`、`ringlearn-keyboard-check`、`ringlearn-perf-measure`、`ringlearn-build-test`、`ringlearn-debug-runtime`。均符合 2026-08 skill 规范（`quick_validate.py` 校验通过、含 `agents/openai.yaml` UI 元数据）；并已以 junction 安装到 `~/.codex/skills/`（Codex 不扫描项目级 `.codex/skills/`，需在用户级目录才能自动发现；更新后需重启 Codex）。直接调用其脚本（`occlusion_check.py`、`measure_gfxinfo.py` 等），SKILL.md 含流程与基线。
+- 项目内 `.codex/skills/`（**已 gitignore，仅本地**）沉淀 5 个测试/调试 skill：`ringlearn-device-test`、`ringlearn-keyboard-check`、`ringlearn-perf-measure`、`ringlearn-build-test`、`ringlearn-debug-runtime`。均符合 2026-08 skill 规范（`quick_validate.py` 校验通过、含 `agents/openai.yaml` UI 元数据）；**纯项目级使用**——Codex 桌面版可直接发现项目 `.codex/skills/`；若改用 Codex CLI（官方仅扫描 `~/.codex/skills/`），需临时建 junction 或复制到用户级目录。直接调用其脚本（`occlusion_check.py`、`measure_gfxinfo.py` 等），SKILL.md 含流程与基线。
 - 键盘遮挡验收：输入「ふ」触发候选栏后，输入框 bottom < 候选栏 top（留 6dp 间隙）；键盘表面直达系统导航栏上沿。
 - 陷阱：
   - PowerShell 写 Kotlin 用**单引号字符串或 here-string**；文件 CRLF/LF 混用导致 `.Replace()` 失配时**优先整体重写文件**。
