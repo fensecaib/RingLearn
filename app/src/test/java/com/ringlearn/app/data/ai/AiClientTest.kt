@@ -71,6 +71,8 @@ class AiClientTest {
         assertTrue(body.contains("\"model\":\"deepseek-v4-flash\""))
         assertTrue(body.contains("\"stream\":true"))
         assertTrue(body.contains("\"max_tokens\":2000"))
+        // 默认关闭深度思考，避免 max_tokens 全耗在 reasoning 上导致空回复
+        assertTrue(body.contains("\"thinking\":{\"type\":\"disabled\"}"))
         assertTrue(body.contains("\"role\":\"system\""))
         assertTrue(body.contains("\"content\":\"你好\""))
     }
@@ -117,5 +119,27 @@ class AiClientTest {
     @Test
     fun `parseComplete - malformed returns null`() {
         assertNull(AiClient.parseComplete(json, "oops"))
+    }
+
+    @Test
+    fun `buildRequest - thinking enabled`() {
+        val config = AiChatConfig(
+            baseUrl = "https://api.deepseek.com",
+            apiKey = "sk-test",
+            model = "deepseek-v4-flash",
+            maxTokens = 2000,
+            thinkingEnabled = true
+        )
+        val request = AiClient.buildRequest(
+            config,
+            listOf(AiChatMessage("user", "你好")),
+            stream = true
+        )
+        val body = request.body?.let {
+            val buffer = okio.Buffer()
+            it.writeTo(buffer)
+            buffer.readUtf8()
+        }.orEmpty()
+        assertTrue(body.contains("\"thinking\":{\"type\":\"enabled\"}"))
     }
 }

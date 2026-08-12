@@ -11,7 +11,12 @@ data class AiChatConfig(
     /** 最大输出 token 数 */
     val maxTokens: Int = DEFAULT_MAX_TOKENS,
     /** 系统提示词（固定于请求首条） */
-    val systemPrompt: String = DEFAULT_SYSTEM_PROMPT
+    val systemPrompt: String = DEFAULT_SYSTEM_PROMPT,
+    /**
+     * 是否开启 DeepSeek 深度思考（reasoning）模式。默认关闭：V4 默认思考开启且可能把 max_tokens 全耗在
+     * reasoning_content 上导致 content 为空（finish_reason=length）；关闭后必出可见内容、响应更快。
+     */
+    val thinkingEnabled: Boolean = false
 ) {
     val isConfigured: Boolean get() = apiKey.isNotBlank() && baseUrl.isNotBlank() && model.isNotBlank()
 }
@@ -38,3 +43,4 @@ val SYSTEM_PROMPT_PRESETS: List<Pair<String, String>> = listOf(
     "语法讲解" to "你是一位日语语法专家。请拆解句子的语法结构，解释助词、动词变形与句型，并给出替换练习。",
     "自定义" to ""
 )
+

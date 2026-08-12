@@ -258,6 +258,13 @@ dueAt = now + interval * 24h
 - **密钥安全**：API Key 用 Android Keystore AES/GCM 加密后写入 DataStore（`ringlearn_ai`），明文不落盘、不入库。
 - **Markdown 轻量渲染**：自绘解析标题/加粗/行内代码/列表/代码块，剥离原始 HTML，无第三方 Markdown 库。
 - **输入复用**：AI 输入框复用 `RingLearnImeField`（内置罗马音键盘 / 一键切换系统输入法），键盘覆盖层与底栏显隐逻辑与其他页面一致。
+- **流式性能**：真机（弱机）实测每 token 全屏重组 + 长文本 Markdown 重解析是流式卡顿主因，已做三重优化：
+  - `StreamThrottle` 自适应节流（短回复 ~80ms、长回复最高 200ms，完成时强制 flush 最终文本）；
+  - 流式增量只重组最后一条气泡（`StreamingBubble` 内部订阅 `streamingText`，消除整屏重组）；
+  - 流式期间用 `InlineMarkdownText` 轻量渲染（加粗/行内代码/斜体实时可见），完成后切换完整 Markdown 排版。
+  - 效果：流式期 UI 线程帧耗时 p95 ≈ 2.5ms（framestats 实测），GPU ≈ 5ms；gfxinfo 高 janky% 多为稀疏更新帧的 vsync 错位度量伪影。
+- **深度思考开关**：DeepSeek V4 默认开启思考模式，可能把 `max_tokens` 全耗在 `reasoning_content` 上导致 `content` 为空（`finish_reason=length`）；
+  应用默认在请求中携带 `thinking:{"type":"disabled"}`（设置页可开启「深度思考」），保证必出可见内容、响应更快。
 ## 6. 性能优化与真机测量（2026-08）
 
 ### 6.1 常驻 Tab 宿主（KeepAliveNavHost）

@@ -104,6 +104,37 @@ internal fun buildInline(
     }
 }
 
+/**
+ * 流式轻量渲染：单个 Text + 行内样式（加粗/行内代码/斜体实时可见），
+ * 不做块级布局（标题/列表/代码块）——弱机流式期长文本重渲染的主线程瓶颈所在；
+ * 流式完成后由 [MarkdownText] 渲染完整排版。
+ */
+@Composable
+fun InlineMarkdownText(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodyMedium,
+    color: Color = MaterialTheme.colorScheme.onSurface
+) {
+    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
+    val primary = MaterialTheme.colorScheme.primary
+    val (bold, code, italic) = remember(style, color, surfaceContainerHigh, primary) {
+        Triple(
+            style.toSpanStyle().copy(fontWeight = FontWeight.Bold),
+            style.toSpanStyle().copy(
+                fontFamily = FontFamily.Monospace,
+                background = surfaceContainerHigh,
+                color = primary
+            ),
+            style.toSpanStyle().copy(fontStyle = FontStyle.Italic)
+        )
+    }
+    Text(
+        text = buildInline(text, bold, code, italic),
+        style = style.copy(color = color),
+        modifier = modifier
+    )
+}
 /** 聊天气泡内 Markdown 渲染（自绘，无第三方库）。 */
 @Composable
 fun MarkdownText(
@@ -113,13 +144,19 @@ fun MarkdownText(
     color: Color = MaterialTheme.colorScheme.onSurface
 ) {
     val blocks = remember(text) { parseMarkdown(text) }
-    val bold = style.toSpanStyle().copy(fontWeight = FontWeight.Bold)
-    val code = style.toSpanStyle().copy(
-        fontFamily = FontFamily.Monospace,
-        background = MaterialTheme.colorScheme.surfaceContainerHigh,
-        color = MaterialTheme.colorScheme.primary
-    )
-    val italic = style.toSpanStyle().copy(fontStyle = FontStyle.Italic)
+    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
+    val primary = MaterialTheme.colorScheme.primary
+    val (bold, code, italic) = remember(style, color, surfaceContainerHigh, primary) {
+        Triple(
+            style.toSpanStyle().copy(fontWeight = FontWeight.Bold),
+            style.toSpanStyle().copy(
+                fontFamily = FontFamily.Monospace,
+                background = surfaceContainerHigh,
+                color = primary
+            ),
+            style.toSpanStyle().copy(fontStyle = FontStyle.Italic)
+        )
+    }
     Column(modifier = modifier.fillMaxWidth()) {
         blocks.forEach { block ->
             when (block) {

@@ -83,10 +83,14 @@ class AiChatRepository @Inject constructor(
             AiChatEntity(sessionId = sessionId, role = "assistant", content = "", createdAt = now)
         )
         val sb = StringBuilder()
+        // 节流 UI 更新：避免每个 token 一次全屏重组/Markdown 重解析（弱机流式期帧卡顿主因）
+        val throttle = StreamThrottle()
         val result = try {
             client.streamChat(config, requestMessages) { delta ->
                 sb.append(delta)
-                onDelta(sb.toString())
+                if (throttle.shouldEmit(System.currentTimeMillis(), sb.length)) {
+                    onDelta(sb.toString())
+                }
             }
         } catch (e: CancellationException) {
             dao.update(
@@ -100,6 +104,8 @@ class AiChatRepository @Inject constructor(
         }
         val finalText = sb.toString()
         if (result.isSuccess) {
+            // 完成时强制 flush 最终累积文本（再写 DB），杜绝节流丢尾造成的「文本回跳」
+            onDelta(finalText)
             dao.update(
                 AiChatEntity(
                     id = assistantId, sessionId = sessionId, role = "assistant",

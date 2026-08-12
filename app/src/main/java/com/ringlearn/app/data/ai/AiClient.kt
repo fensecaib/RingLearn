@@ -116,6 +116,8 @@ class AiClient @Inject constructor() {
                 put("stream", stream)
                 put("max_tokens", config.maxTokens)
                 put("temperature", 0.7)
+                // DeepSeek V4 默认思考模式开启，可能把 max_tokens 全耗在 reasoning 上导致 content 为空；默认关闭
+                put("thinking", buildJsonObject { put("type", if (config.thinkingEnabled) "enabled" else "disabled") })
                 put(
                     "messages", buildJsonArray {
                         messages.forEach { m ->

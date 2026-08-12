@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -33,6 +34,7 @@ class AiChatConfigRepository @Inject constructor(
         val MODEL = stringPreferencesKey("ai_model")
         val MAX_TOKENS = intPreferencesKey("ai_max_tokens")
         val SYSTEM_PROMPT = stringPreferencesKey("ai_system_prompt")
+        val THINKING_ENABLED = booleanPreferencesKey("ai_thinking_enabled")
     }
 
     val config: Flow<AiChatConfig> = context.aiConfigDataStore.data
@@ -46,7 +48,8 @@ class AiChatConfigRepository @Inject constructor(
                 apiKey = p[Keys.API_KEY_ENC]?.let { SecretBox.decrypt(it) } ?: "",
                 model = p[Keys.MODEL] ?: DEFAULT_MODEL,
                 maxTokens = (p[Keys.MAX_TOKENS] ?: DEFAULT_MAX_TOKENS).coerceIn(128, 8192),
-                systemPrompt = p[Keys.SYSTEM_PROMPT] ?: DEFAULT_SYSTEM_PROMPT
+                systemPrompt = p[Keys.SYSTEM_PROMPT] ?: DEFAULT_SYSTEM_PROMPT,
+                thinkingEnabled = p[Keys.THINKING_ENABLED] ?: false
             )
         }
 
@@ -55,7 +58,8 @@ class AiChatConfigRepository @Inject constructor(
         apiKey: String = "",
         model: String = DEFAULT_MODEL,
         maxTokens: Int = DEFAULT_MAX_TOKENS,
-        systemPrompt: String = DEFAULT_SYSTEM_PROMPT
+        systemPrompt: String = DEFAULT_SYSTEM_PROMPT,
+        thinkingEnabled: Boolean = false
     ) {
         context.aiConfigDataStore.edit { p ->
             p[Keys.BASE_URL] = baseUrl.trim().ifBlank { DEFAULT_BASE_URL }
@@ -67,6 +71,7 @@ class AiChatConfigRepository @Inject constructor(
             p[Keys.MODEL] = model.trim().ifBlank { DEFAULT_MODEL }
             p[Keys.MAX_TOKENS] = maxTokens.coerceIn(128, 8192)
             p[Keys.SYSTEM_PROMPT] = systemPrompt.trim().ifBlank { DEFAULT_SYSTEM_PROMPT }
+            p[Keys.THINKING_ENABLED] = thinkingEnabled
         }
     }
 }

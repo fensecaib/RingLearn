@@ -37,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -80,8 +81,6 @@ fun AiChatScreen(
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val config by viewModel.config.collectAsStateWithLifecycle()
     val sending by viewModel.sending.collectAsStateWithLifecycle()
-    val streamingText by viewModel.streamingText.collectAsStateWithLifecycle()
-    val contextStats by viewModel.contextStats.collectAsStateWithLifecycle()
     val useInAppKeyboard by viewModel.useInAppKeyboard.collectAsStateWithLifecycle()
     val haptic = rememberHapticManager()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -121,7 +120,7 @@ fun AiChatScreen(
                 title = { Text("AI 对话") },
                 actions = {
                     ContextBadge(
-                        stats = contextStats,
+                        viewModel = viewModel,
                         onClick = {
                             haptic.tick()
                             showContextInfo = !showContextInfo
@@ -177,10 +176,10 @@ fun AiChatScreen(
                 .imePadding()
         ) {
             if (showContextInfo) {
-                ContextInfoBanner(stats = contextStats, onClose = { showContextInfo = false })
+                ContextInfoBanner(viewModel = viewModel, onClose = { showContextInfo = false })
             }
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                if (messages.isEmpty() && !sending && streamingText == null) {
+                if (messages.isEmpty() && !sending) {
                     EmptyState(
                         iconRes = R.drawable.ic_ai,
                         title = "开始 AI 对话",
@@ -197,12 +196,22 @@ fun AiChatScreen(
                             bottom = 12.dp + if (imeActive) contentOverflowDp else 0.dp
                         )
                     ) {
+                        val lastId = messages.lastOrNull()?.id
                         items(messages, key = { it.id }) { msg ->
-                            ChatBubble(
-                                message = msg,
-                                liveText = if (msg.id == messages.lastOrNull()?.id) streamingText else null,
-                                onRetry = viewModel::retry
-                            )
+                            if (msg.id == lastId) {
+                                // 最后一条（助手流式）在此订阅 streamingText：增量只重组本气泡，避免整屏重组
+                                StreamingBubble(
+                                    viewModel = viewModel,
+                                    message = msg,
+                                    onRetry = viewModel::retry
+                                )
+                            } else {
+                                ChatBubble(
+                                    message = msg,
+                                    liveText = null,
+                                    onRetry = viewModel::retry
+                                )
+                            }
                         }
                     }
                 }
@@ -261,9 +270,9 @@ fun AiChatScreen(
             config = config,
             onTest = viewModel::testConnection,
             onDismiss = { showSettings = false },
-            onSave = { baseUrl, apiKey, model, maxTokens, systemPrompt ->
+            onSave = { baseUrl, apiKey, model, maxTokens, systemPrompt, thinkingEnabled ->
                 haptic.click()
-                viewModel.updateConfig(baseUrl, apiKey, model, maxTokens, systemPrompt)
+                viewModel.updateConfig(baseUrl, apiKey, model, maxTokens, systemPrompt, thinkingEnabled)
                 showSettings = false
             }
         )
@@ -287,9 +296,13 @@ fun AiChatScreen(
     }
 }
 
-/** 上下文统计状态徽章：N 轮 · M chars，点击展开说明。 */
+/** 上下文统计状态徽章：N 轮 · M chars，点击展开说明。内部订阅 contextStats（仅徽章随流式增量重组）。 */
 @Composable
-private fun ContextBadge(stats: ContextStats, onClick: () -> Unit) {
+private fun ContextBadge(
+    viewModel: AiChatViewModel,
+    onClick: () -> Unit
+) {
+    val stats by viewModel.contextStats.collectAsStateWithLifecycle()
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(50),
@@ -315,9 +328,13 @@ private fun ContextBadge(stats: ContextStats, onClick: () -> Unit) {
     }
 }
 
-/** 上下文说明横幅：完整上下文已发送、system 提示词固定于首条（不压缩）。 */
+/** 上下文说明横幅：完整上下文已发送、system 提示词固定于首条（不压缩）。内部订阅 contextStats。 */
 @Composable
-private fun ContextInfoBanner(stats: ContextStats, onClose: () -> Unit) {
+private fun ContextInfoBanner(
+    viewModel: AiChatViewModel,
+    onClose: () -> Unit
+) {
+    val stats by viewModel.contextStats.collectAsStateWithLifecycle()
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -356,6 +373,20 @@ private fun ContextInfoBanner(stats: ContextStats, onClose: () -> Unit) {
     }
 }
 
+/** 最后一条气泡：内部订阅流式文本，流式增量只重组本气泡（避免整屏重组）。 */
+@Composable
+private fun StreamingBubble(
+    viewModel: AiChatViewModel,
+    message: AiChatEntity,
+    onRetry: () -> Unit
+) {
+    val liveText by viewModel.streamingText.collectAsStateWithLifecycle()
+    ChatBubble(
+        message = message,
+        liveText = liveText,
+        onRetry = onRetry
+    )
+}
 /** 聊天气泡：用户右对齐纯文本；助手左对齐 Markdown；错误行红色容器 + 重试。 */
 @Composable
 private fun ChatBubble(
@@ -409,11 +440,20 @@ private fun ChatBubble(
                     style = MaterialTheme.typography.bodyLarge,
                     color = contentColor
                 )
-                else -> MarkdownText(
-                    text = text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = contentColor
-                )
+                else -> if (liveText != null) {
+                    // 流式中：轻量行内渲染（避免长文本块级 Markdown 布局的主线程开销）
+                    InlineMarkdownText(
+                        text = text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = contentColor
+                    )
+                } else {
+                    MarkdownText(
+                        text = text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = contentColor
+                    )
+                }
             }
             if (isError) {
                 TextButton(onClick = onRetry, modifier = Modifier.padding(top = 4.dp)) {
@@ -430,13 +470,14 @@ private fun AiSettingsDialog(
     config: AiChatConfig,
     onTest: (AiChatConfig, (Result<String>) -> Unit) -> Unit,
     onDismiss: () -> Unit,
-    onSave: (baseUrl: String, apiKey: String, model: String, maxTokens: Int, systemPrompt: String) -> Unit
+    onSave: (baseUrl: String, apiKey: String, model: String, maxTokens: Int, systemPrompt: String, thinkingEnabled: Boolean) -> Unit
 ) {
     var baseUrl by remember { mutableStateOf(config.baseUrl) }
     var apiKey by remember { mutableStateOf(config.apiKey) }
     var model by remember { mutableStateOf(config.model) }
     var maxTokens by remember { mutableStateOf(config.maxTokens.toString()) }
     var systemPrompt by remember { mutableStateOf(config.systemPrompt) }
+    var thinkingEnabled by remember { mutableStateOf(config.thinkingEnabled) }
     var presetName by remember {
         mutableStateOf(SYSTEM_PROMPT_PRESETS.firstOrNull { it.second == config.systemPrompt }?.first ?: "自定义")
     }
@@ -504,6 +545,28 @@ private fun AiSettingsDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(12.dp))
+                // 深度思考开关：默认关闭（V4 思考模式可能把 max_tokens 全耗在 reasoning 上导致空回复）
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = "深度思考",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            text = "开启更细致但更慢，可能因思考过长返回空内容；默认关闭更稳更快",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = thinkingEnabled,
+                        onCheckedChange = { thinkingEnabled = it }
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
                 Text(
                     text = "系统提示词预设",
@@ -580,7 +643,7 @@ private fun AiSettingsDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onSave(baseUrl.trim(), apiKey.trim(), model.trim(), maxTokensInt, systemPrompt.trim())
+                    onSave(baseUrl.trim(), apiKey.trim(), model.trim(), maxTokensInt, systemPrompt.trim(), thinkingEnabled)
                 }
             ) { Text("保存") }
         },

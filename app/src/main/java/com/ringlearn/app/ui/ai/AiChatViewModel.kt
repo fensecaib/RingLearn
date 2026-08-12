@@ -100,7 +100,8 @@ class AiChatViewModel @Inject constructor(
         apiKey: String,
         model: String,
         maxTokens: Int,
-        systemPrompt: String
+        systemPrompt: String,
+        thinkingEnabled: Boolean
     ) {
         viewModelScope.launch {
             configRepository.update(
@@ -108,7 +109,8 @@ class AiChatViewModel @Inject constructor(
                 apiKey = apiKey,
                 model = model,
                 maxTokens = maxTokens,
-                systemPrompt = systemPrompt
+                systemPrompt = systemPrompt,
+                thinkingEnabled = thinkingEnabled
             )
         }
     }
