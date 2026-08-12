@@ -20,12 +20,21 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.zIndex
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
+import kotlinx.coroutines.delay
+
+/** 错峰预热初始延迟（ms）：在首屏渲染 / TTFD 上报完成后执行 */
+private const val PREWARM_INITIAL_DELAY_MS = 1200L
+
+/** 错峰预热相邻两个 Tab 组合的间隔（ms） */
+private const val PREWARM_STEP_MS = 350L
 
 /**
  * 常驻 Tab 宿主：替代 NavDisplay，让所有已访问 Tab 保持组合。
  *
  * - 懒加载首访常驻：冷启动只组合首页；首次切到某 Tab 时才组合该屏，
  *   之后切换仅是 alpha 可见性切换，不再重新组合整树。
+ * - 空闲错峰预热：首屏渲染完成后按间隔逐个预组合未访问 Tab（见下方 LaunchedEffect），
+ *   任何 Tab 的首次切换也变为纯 alpha 切换，消除首访组合尖峰。
  * - 非激活屏幕：graphicsLayer alpha=0 不绘制，并用 pointerInput 拦截全部输入
  *   （任何事件均不传递给背后屏幕），同时 clearAndSetSemantics 移出无障碍树。
  */
@@ -50,6 +59,19 @@ fun KeepAliveNavHost(
     LaunchedEffect(topLevelRoute) {
         if (topLevelRoute !in visitedRoutes) {
             visitedRoutes = visitedRoutes + topLevelRoute
+        }
+    }
+    // 空闲错峰预热：首屏渲染完成（TTFD 上报后）再按间隔逐个预组合未访问 Tab，
+    // 消除首次切到某 Tab 的「整树首次组合」尖峰（优化前 release 99th≈150ms / debug≈450ms）。
+    // 已知副作用（可接受）：预热会触发 Study/Quiz/Ai 等页 ViewModel init 的轻量 Room 查询
+    // （autoSpeakEnabled 默认 false，不会触发 TTS）；内存提前达到全 Tab 常驻水平（约 117MB，基线内）。
+    LaunchedEffect(Unit) {
+        delay(PREWARM_INITIAL_DELAY_MS)
+        for ((route, _) in entries) {
+            if (route !in visitedRoutes) {
+                visitedRoutes = visitedRoutes + route
+                delay(PREWARM_STEP_MS)
+            }
         }
     }
 

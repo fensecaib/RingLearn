@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import androidx.compose.runtime.Stable
 import com.ringlearn.app.data.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -20,6 +21,8 @@ import kotlinx.coroutines.launch
  * 所有交互（点击、滑动、开关）统一从这里发出震动反馈，
  * 并受用户设置的“震动反馈开关”控制。
  */
+// @Stable：composables 只调用方法、不在组合期读取其可变状态；显式标注恢复下游 composable 跳过能力
+@Stable
 @Singleton
 class HapticManager @Inject constructor(
     @ApplicationContext context: Context,

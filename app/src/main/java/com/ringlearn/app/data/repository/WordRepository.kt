@@ -11,12 +11,16 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.withContext
 
 /** 单词与学习进度的统一仓库，屏蔽 Room / 本地词库细节。 */
@@ -44,13 +48,20 @@ class WordRepository @Inject constructor(
         val isReady: Boolean = false
     )
 
-    /** 每分钟推进一次：让“待复习”数量能随单词到期时间自动刷新（而不依赖固定时间戳） */
+    /** 仓库内 scope：单例应用级生命周期（与 HapticManager 同模式），承载共享的分钟级 ticker */
+    private val tickerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * 每分钟推进一次：让“待复习”数量能随单词到期时间自动刷新（而不依赖固定时间戳）。
+     * shareIn(replay = 1)：下游 dueCount / learnedTodayCount 共用同一个 60 秒循环
+     * （优化前每个订阅者各起一个独立循环），新订阅者立即拿到最新时间戳；无订阅时循环停摆。
+     */
     private val nowTicker: Flow<Long> = flow {
         while (true) {
             emit(System.currentTimeMillis())
             delay(60_000L)
         }
-    }
+    }.shareIn(tickerScope, started = SharingStarted.WhileSubscribed(), replay = 1)
 
     private val dueCount: Flow<Int> = nowTicker.flatMapLatest { wordDao.observeDueCount(it) }
 

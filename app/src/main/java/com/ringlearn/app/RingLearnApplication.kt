@@ -24,7 +24,7 @@ class RingLearnApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        // 首次启动时预置 500+ 内置词库
+        // 首次启动时预置 1000 词内置词库
         applicationScope.launch { wordRepository.ensureSeeded() }
     }
 

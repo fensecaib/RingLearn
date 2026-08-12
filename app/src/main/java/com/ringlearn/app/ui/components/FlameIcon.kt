@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 
 /**
- * 使用 Compose Canvas 手绘的“连续学习火焰”图标（无需 Lottie / 第三方动画库）。
+ * 使用 Compose Canvas 手绘的"连续学习火焰"图标（无需 Lottie / 第三方动画库）。
  * 火焰带有轻微缩放/摇摆的无限循环动画，底部附带渐变光晕。
  */
 @Composable
@@ -54,6 +54,39 @@ fun FlameIcon(
     }
 }
 
+/**
+ * 火焰形状以单位坐标系（0..1）一次性构建并全局复用：
+ * 动画期间每帧仅做 DrawScope 缩放映射，消除原先每帧 2×Path + Brush 的分配。
+ * 全部为填充绘制（无描边），非等比缩放安全。
+ */
+private val unitOuterFlame: Path = Path().apply {
+    moveTo(0.50f, 0.06f)
+    cubicTo(0.80f, 0.32f, 0.90f, 0.50f, 0.90f, 0.70f)
+    cubicTo(0.90f, 0.94f, 0.72f, 1.02f, 0.50f, 1.02f)
+    cubicTo(0.28f, 1.02f, 0.10f, 0.94f, 0.10f, 0.70f)
+    cubicTo(0.10f, 0.50f, 0.20f, 0.32f, 0.50f, 0.06f)
+    close()
+}
+
+private val unitInnerFlame: Path = Path().apply {
+    moveTo(0.50f, 0.30f)
+    cubicTo(0.66f, 0.44f, 0.72f, 0.56f, 0.72f, 0.68f)
+    cubicTo(0.72f, 0.84f, 0.62f, 0.90f, 0.50f, 0.90f)
+    cubicTo(0.38f, 0.90f, 0.28f, 0.84f, 0.28f, 0.68f)
+    cubicTo(0.28f, 0.56f, 0.34f, 0.44f, 0.50f, 0.30f)
+    close()
+}
+
+private val flameGradient: Brush = Brush.verticalGradient(
+    colors = listOf(
+        Color(0xFFFDE68A),
+        Color(0xFFF97316),
+        Color(0xFFEF4444)
+    ),
+    startY = 0f,
+    endY = 1f
+)
+
 @Composable
 private fun FlameCanvas(modifier: Modifier, scale: Float, tilt: Float) {
     Canvas(modifier = modifier) {
@@ -61,45 +94,19 @@ private fun FlameCanvas(modifier: Modifier, scale: Float, tilt: Float) {
         val h = size.height
         scale(scale, pivot = Offset(w / 2f, h)) {
             rotate(tilt, pivot = Offset(w / 2f, h * 0.9f)) {
-                // 外焰
-                val outer = Path().apply {
-                    moveTo(w * 0.50f, h * 0.06f)
-                    cubicTo(w * 0.80f, h * 0.32f, w * 0.90f, h * 0.50f, w * 0.90f, h * 0.70f)
-                    cubicTo(w * 0.90f, h * 0.94f, w * 0.72f, h * 1.02f, w * 0.50f, h * 1.02f)
-                    cubicTo(w * 0.28f, h * 1.02f, w * 0.10f, h * 0.94f, w * 0.10f, h * 0.70f)
-                    cubicTo(w * 0.10f, h * 0.50f, w * 0.20f, h * 0.32f, w * 0.50f, h * 0.06f)
-                    close()
-                }
-                drawPath(
-                    outer,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFFFDE68A),
-                            Color(0xFFF97316),
-                            Color(0xFFEF4444)
-                        ),
-                        startY = 0f,
-                        endY = h
+                // 单位空间 → 实际画布的缩放映射；Path 与渐变 Brush 全部复用缓存
+                scale(w, h, pivot = Offset.Zero) {
+                    // 外焰
+                    drawPath(unitOuterFlame, brush = flameGradient)
+                    // 内焰
+                    drawPath(unitInnerFlame, color = Color(0xFFFFF9E3))
+                    // 底部光晕
+                    drawOval(
+                        color = Color(0x33F97316),
+                        topLeft = Offset(0.22f, 0.92f),
+                        size = Size(0.56f, 0.10f)
                     )
-                )
-
-                // 内焰
-                val inner = Path().apply {
-                    moveTo(w * 0.50f, h * 0.30f)
-                    cubicTo(w * 0.66f, h * 0.44f, w * 0.72f, h * 0.56f, w * 0.72f, h * 0.68f)
-                    cubicTo(w * 0.72f, h * 0.84f, w * 0.62f, h * 0.90f, w * 0.50f, h * 0.90f)
-                    cubicTo(w * 0.38f, h * 0.90f, w * 0.28f, h * 0.84f, w * 0.28f, h * 0.68f)
-                    cubicTo(w * 0.28f, h * 0.56f, w * 0.34f, h * 0.44f, w * 0.50f, h * 0.30f)
-                    close()
                 }
-                drawPath(inner, color = Color(0xFFFFF9E3))
-
-                // 底部光晕
-                drawOval(
-                    color = Color(0x33F97316),
-                    topLeft = Offset(w * 0.22f, h * 0.92f),
-                    size = Size(w * 0.56f, h * 0.10f)
-                )
             }
         }
     }

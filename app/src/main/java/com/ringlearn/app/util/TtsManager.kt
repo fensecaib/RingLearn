@@ -2,6 +2,7 @@ package com.ringlearn.app.util
 
 import android.content.Context
 import android.speech.tts.TextToSpeech
+import androidx.compose.runtime.Stable
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Locale
 import javax.inject.Inject
@@ -14,6 +15,8 @@ import javax.inject.Singleton
  * 如果像早期版本一样在每个页面进入/退出时创建/销毁，会导致底栏切换出现 200ms+ 卡顿。
  * 因此这里改为：单例只创建一次，首次 speak 时才真正初始化，之后全程复用、永不销毁。
  */
+// @Stable：composables 只调用方法、不在组合期读取其可变状态；显式标注恢复下游 composable 跳过能力
+@Stable
 @Singleton
 class TtsManager @Inject constructor(
     @ApplicationContext private val appContext: Context

@@ -22,7 +22,7 @@ object AppModule {
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "ringlearn.db")
             .addMigrations(AppDatabase.MIGRATION_1_2)
-            .fallbackToDestructiveMigration(dropAllTables = true)
+            // 不启用破坏性回退：未来漏写 Migration 时开库直接抛异常暴露问题，绝不清空用户学习数据
             .build()
 
     @Provides

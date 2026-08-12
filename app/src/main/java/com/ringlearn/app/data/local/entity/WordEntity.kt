@@ -1,5 +1,6 @@
 package com.ringlearn.app.data.local.entity
 
+import androidx.compose.runtime.Stable
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -8,6 +9,8 @@ import androidx.room.PrimaryKey
  * （repetitions / easeFactor / intervalDays / dueAt），
  * 以及今日学习状态与统计字段。
  */
+// @Stable：纯不可变 data class；显式标注让 List<WordEntity> 参数（候选栏等）静态稳定
+@Stable
 @Entity(tableName = "words")
 data class WordEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,

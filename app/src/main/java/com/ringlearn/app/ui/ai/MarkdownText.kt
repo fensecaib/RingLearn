@@ -32,10 +32,19 @@ internal sealed interface MdBlock {
     data class Numbered(val index: Int, val text: String) : MdBlock
 }
 
+/** HTML 标签剥离正则（文件级复用：避免每次解析重复编译） */
+private val HTML_TAG_REGEX = Regex("<[^>]+>")
+
+/** 有序列表行正则（文件级复用） */
+private val NUMBERED_LINE_REGEX = Regex("""\d+\..*""")
+
+/** 行内样式正则：**加粗** / `行内代码` / *斜体*（文件级复用） */
+private val INLINE_STYLE_REGEX = Regex("""(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)""")
+
 /** 解析 Markdown 为块列表：代码块 / 标题 / 无序列表 / 有序列表 / 段落；先剥离原始 HTML。 */
 internal fun parseMarkdown(text: String): List<MdBlock> {
     val result = mutableListOf<MdBlock>()
-    val plain = text.replace(Regex("<[^>]+>"), "")
+    val plain = text.replace(HTML_TAG_REGEX, "")
     val lines = plain.split("\n")
     var inCode = false
     val codeLines = mutableListOf<String>()
@@ -66,7 +75,7 @@ internal fun parseMarkdown(text: String): List<MdBlock> {
             trimmed.startsWith("#") -> result.add(MdBlock.Heading(1, trimmed.removePrefix("#").trim()))
             trimmed.startsWith("- ") || trimmed.startsWith("* ") ->
                 result.add(MdBlock.Bullet(trimmed.drop(2).trim()))
-            trimmed.matches(Regex("""\d+\..*""")) ->
+            NUMBERED_LINE_REGEX.matches(trimmed) ->
                 result.add(
                     MdBlock.Numbered(
                         index = trimmed.substringBefore(".").toIntOrNull() ?: 0,
@@ -87,10 +96,9 @@ internal fun buildInline(
     code: SpanStyle,
     italic: SpanStyle
 ): AnnotatedString {
-    val regex = Regex("""(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)""")
     return buildAnnotatedString {
         var last = 0
-        for (m in regex.findAll(text)) {
+        for (m in INLINE_STYLE_REGEX.findAll(text)) {
             append(text.substring(last, m.range.first))
             val token = m.value
             when {
