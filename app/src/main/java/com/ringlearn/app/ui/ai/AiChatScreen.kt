@@ -258,6 +258,9 @@ fun AiChatScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
+                        // 短会话贴底（聊天范式）：内容不足视口时整体贴底，键盘收起后原键盘区域不留白；
+                        // 内容≥视口时无剩余空间，排列不生效，滚动/吸底逻辑不变。
+                        verticalArrangement = Arrangement.Bottom,
                         contentPadding = PaddingValues(
                             start = 12.dp, top = 8.dp, end = 12.dp,
                             bottom = 12.dp
