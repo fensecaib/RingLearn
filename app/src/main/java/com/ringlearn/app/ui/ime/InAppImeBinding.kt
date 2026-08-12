@@ -24,12 +24,14 @@ fun InAppImeBinding(
             controller.ime = ime
             controller.candidates = candidates
             controller.onCollapse = onCollapse
-        } else {
+        } else if (controller.ime === ime) {
+            // 仅当控制器正指向本页 ime 才清空：多页常驻时非激活页的 SideEffect 也会执行，
+            // 无条件置 null 会把激活页刚绑定的键盘误隐藏（预热常驻后的回归）。
             controller.ime = null
         }
     }
     DisposableEffect(Unit) {
-        onDispose { controller.ime = null }
+        onDispose { if (controller.ime === ime) controller.ime = null }
     }
 }
 

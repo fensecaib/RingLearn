@@ -131,7 +131,10 @@ fun WordBookScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .imePadding()
+                // imePadding 仅系统输入法模式启用：内置键盘模式系统 IME 不连接（blockingInterceptor 拦截），
+                // 抬升由 contentOverflowDp 实测负责；部分设备聚焦时 IME insets 误报非零，
+                // imePadding 会产生幻影底部 padding，导致收起键盘后键盘区域留白。
+                .then(if (useInAppKeyboard) Modifier else Modifier.imePadding())
                 .padding(padding)
         ) {
             RingLearnImeField(
