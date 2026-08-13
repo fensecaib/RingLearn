@@ -1,7 +1,9 @@
 package com.ringlearn.app.ui.ai
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,16 +22,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,7 +47,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -75,7 +80,6 @@ import com.ringlearn.app.data.ai.AiChatConfig
 import com.ringlearn.app.data.ai.DEFAULT_MAX_TOKENS
 import com.ringlearn.app.data.ai.SYSTEM_PROMPT_PRESETS
 import com.ringlearn.app.data.local.entity.AiChatEntity
-import com.ringlearn.app.ui.components.EmptyState
 import com.ringlearn.app.ui.ime.InAppImeBinding
 import com.ringlearn.app.ui.ime.LocalInAppImeController
 import com.ringlearn.app.ui.ime.RingLearnImeField
@@ -88,6 +92,32 @@ import com.ringlearn.app.util.HapticManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+/** 消息时间分组标签格式（java.time 线程安全，仅组合期主线程调用） */
+private val TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
+private val DATE_TIME_FORMAT = DateTimeFormatter.ofPattern("M月d日 HH:mm")
+
+/**
+ * 计算消息时间分组标签：与上一条相隔 ≥5 分钟或跨天时显示；首条必显（带日期）。
+ * 纯函数、不读任何状态，不影响重组作用域。
+ */
+private fun timeHeaderLabel(createdAt: Long, prevCreatedAt: Long?): String? {
+    if (createdAt <= 0L) return null
+    val zone = ZoneId.systemDefault()
+    val current = Instant.ofEpochMilli(createdAt).atZone(zone)
+    if (prevCreatedAt == null) return current.format(DATE_TIME_FORMAT)
+    val prev = Instant.ofEpochMilli(prevCreatedAt).atZone(zone)
+    val gapMinutes = Duration.between(prev, current).toMinutes()
+    return when {
+        current.toLocalDate() != prev.toLocalDate() -> current.format(DATE_TIME_FORMAT)
+        gapMinutes >= 5 -> current.format(TIME_FORMAT)
+        else -> null
+    }
+}
 
 /** AI 对话页：聊天气泡 + 内置键盘/系统输入法 + 上下文统计徽章 + 设置/重置。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -331,13 +361,7 @@ private fun ColumnScope.AiMessagesArea(
             .dismissInAppImeOnTap(enabled = keyboardVisible, onDismiss = onDismissKeyboard)
     ) {
         if (messages.isEmpty() && !sending) {
-            EmptyState(
-                iconRes = R.drawable.ic_ai,
-                title = "开始 AI 对话",
-                subtitle = "发送日语或中文句子，AI 帮你翻译、讲解语法、解析单词。\n配置与 API Key 在右上角设置中完成。",
-                actionLabel = "打开设置",
-                onAction = onShowSettings
-            )
+            AiWelcomeEmpty(onOpenSettings = onShowSettings)
         } else {
             LazyColumn(
                 state = listState,
@@ -354,20 +378,37 @@ private fun ColumnScope.AiMessagesArea(
                     item(key = "load_older") { LoadMoreItem() }
                 }
                 val lastId = messages.lastOrNull()?.id
-                items(messages, key = { it.id }) { msg ->
-                    if (msg.id == lastId) {
-                        // 最后一条（助手流式）在此订阅 streamingText：增量只重组本气泡，避免整屏重组
-                        StreamingBubble(
-                            viewModel = viewModel,
-                            message = msg,
-                            onRetry = viewModel::retry
-                        )
-                    } else {
-                        ChatBubble(
-                            message = msg,
-                            liveText = null,
-                            onRetry = viewModel::retry
-                        )
+                itemsIndexed(messages, key = { _, msg -> msg.id }) { index, msg ->
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        timeHeaderLabel(msg.createdAt, messages.getOrNull(index - 1)?.createdAt)
+                            ?.let { label ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 10.dp, bottom = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        if (msg.id == lastId) {
+                            // 最后一条（助手流式）在此订阅 streamingText：增量只重组本气泡，避免整屏重组
+                            StreamingBubble(
+                                viewModel = viewModel,
+                                message = msg,
+                                onRetry = viewModel::retry
+                            )
+                        } else {
+                            ChatBubble(
+                                message = msg,
+                                liveText = null,
+                                onRetry = viewModel::retry
+                            )
+                        }
                     }
                 }
             }
@@ -379,15 +420,96 @@ private fun ColumnScope.AiMessagesArea(
                 ((info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= lastMessageIndex(hasMoreOlder, messages.size))
         } }
         if (!atBottom) {
-            SmallFloatingActionButton(
+            Surface(
                 onClick = {
                     haptic.click()
                     scope.launch { listState.scrollToItem(lastMessageIndex(hasMoreOlder, messages.size)) }
                 },
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 12.dp, bottom = 12.dp)
-            ) { Text("↓", style = MaterialTheme.typography.titleMedium) }
+                    .size(40.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "↓",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 空会话欢迎区：圆形图标 + 标题/副标题 + 静态示例提示卡（无交互）。 */
+@Composable
+private fun AiWelcomeEmpty(onOpenSettings: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_ai),
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = "开始 AI 对话",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "发送日语或中文句子，AI 帮你翻译、讲解语法、解析单词。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(24.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+        ) {
+            Text(
+                text = "例如：",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "こんにちは",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "「これは何ですか」是什么意思？",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        Button(onClick = onOpenSettings) {
+            Text("打开设置")
         }
     }
 }
@@ -424,10 +546,13 @@ private fun AiInputBar(
         )
         Spacer(Modifier.width(8.dp))
         if (sending) {
-            IconButton(onClick = {
-                haptic.click()
-                viewModel.stop()
-            }) {
+            IconButton(
+                onClick = {
+                    haptic.click()
+                    viewModel.stop()
+                },
+                modifier = Modifier.size(44.dp)
+            ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_close),
                     contentDescription = "停止生成",
@@ -436,15 +561,16 @@ private fun AiInputBar(
                 )
             }
         } else {
-            IconButton(
+            FilledIconButton(
                 onClick = onSend,
-                enabled = textFieldState.text.isNotEmpty()
+                enabled = textFieldState.text.isNotEmpty(),
+                shape = CircleShape,
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_send),
                     contentDescription = "发送",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -584,17 +710,51 @@ private fun ChatBubble(
         isUser -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurface
     }
+    val bubbleShape = if (isUser) {
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 4.dp, bottomStart = 16.dp)
+    } else {
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+            .padding(vertical = 5.dp),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Top
     ) {
+        if (!isUser) {
+            // 助手/错误消息的角色圆形标
+            Box(
+                modifier = Modifier
+                    .padding(top = 2.dp, end = 8.dp)
+                    .size(30.dp)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "AI",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isError) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    }
+                )
+            }
+        }
         Column(
             modifier = Modifier
-                .fillMaxWidth(if (isUser) 0.85f else 1f)
-                .clip(RoundedCornerShape(16.dp))
+                .fillMaxWidth(if (isUser) 0.78f else 0.88f)
+                .clip(bubbleShape)
                 .background(container)
+                .then(
+                    if (!isUser && !isError) {
+                        Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, bubbleShape)
+                    } else {
+                        Modifier
+                    }
+                )
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             val fullText = liveText ?: message.content
