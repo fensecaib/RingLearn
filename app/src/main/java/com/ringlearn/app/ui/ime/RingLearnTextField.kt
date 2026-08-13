@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldBuffer
+import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +44,7 @@ import androidx.compose.ui.platform.PlatformTextInputInterceptor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
@@ -194,7 +197,9 @@ fun RingLearnImeField(
     trailingIcon: (@Composable () -> Unit)? = null,
     onSwitchToInAppKeyboard: (() -> Unit)? = null,
     keyboardVisible: Boolean = true,
-    onShowKeyboard: (() -> Unit)? = null
+    onShowKeyboard: (() -> Unit)? = null,
+    maxLines: Int = 1,
+    minHeight: Dp = 52.dp
 ) {
     // 组合区下划线（公开 API：OutputTransformation + addStyle，lambda 接收者为 TextFieldBuffer）
     val compositionStyle = SpanStyle(
@@ -210,7 +215,7 @@ fun RingLearnImeField(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .then(if (maxLines > 1) Modifier.heightIn(min = minHeight) else Modifier.height(minHeight))
             .background(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = RoundedCornerShape(16.dp)
@@ -233,6 +238,11 @@ fun RingLearnImeField(
                 BasicTextField(
                     state = ime.state,
                     modifier = Modifier.fillMaxWidth(),
+                    lineLimits = if (maxLines > 1) {
+                        TextFieldLineLimits.MultiLine(1, maxLines)
+                    } else {
+                        TextFieldLineLimits.SingleLine
+                    },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         color = MaterialTheme.colorScheme.onSurface
                     ),

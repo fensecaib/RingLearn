@@ -1,6 +1,19 @@
 package com.ringlearn.app.ui.ai
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -64,6 +77,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
@@ -116,6 +131,52 @@ private fun timeHeaderLabel(createdAt: Long, prevCreatedAt: Long?): String? {
         current.toLocalDate() != prev.toLocalDate() -> current.format(DATE_TIME_FORMAT)
         gapMinutes >= 5 -> current.format(TIME_FORMAT)
         else -> null
+    }
+}
+
+/** 新消息入场动画进度：淡入 + 8dp 上滑，一次性 220ms；值在 graphicsLayer 绘制期读取，不触发逐帧重组。 */
+@Composable
+private fun rememberEntrance(): Animatable<Float, AnimationVector1D> {
+    val anim = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        anim.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing)
+        )
+    }
+    return anim
+}
+
+/** 流式「正在思考…」三点跳动指示：绘制期读取动画值，无逐帧重组。 */
+@Composable
+private fun TypingIndicator() {
+    val transition = rememberInfiniteTransition(label = "typingIndicator")
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        repeat(3) { index ->
+            val offset = transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 4f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 360, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse,
+                    initialStartOffset = StartOffset(offsetMillis = index * 120)
+                ),
+                label = "typingDot$index"
+            )
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 2.dp)
+                    .size(6.dp)
+                    .graphicsLayer { translationY = -offset.value }
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = "正在思考…",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -379,7 +440,17 @@ private fun ColumnScope.AiMessagesArea(
                 }
                 val lastId = messages.lastOrNull()?.id
                 itemsIndexed(messages, key = { _, msg -> msg.id }) { index, msg ->
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    val entrance = rememberEntrance()
+                    val density = LocalDensity.current
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer {
+                                val progress = entrance.value
+                                alpha = progress
+                                translationY = (1f - progress) * with(density) { 8.dp.toPx() }
+                            }
+                    ) {
                         timeHeaderLabel(msg.createdAt, messages.getOrNull(index - 1)?.createdAt)
                             ?.let { label ->
                                 Box(
@@ -542,36 +613,45 @@ private fun AiInputBar(
             placeholder = "输入句子，问问 AI…",
             keyboardVisible = keyboardVisible,
             onSwitchToInAppKeyboard = viewModel::switchToInAppKeyboard,
-            onShowKeyboard = onShowKeyboard
+            onShowKeyboard = onShowKeyboard,
+            maxLines = 4
         )
         Spacer(Modifier.width(8.dp))
-        if (sending) {
-            IconButton(
-                onClick = {
-                    haptic.click()
-                    viewModel.stop()
-                },
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_close),
-                    contentDescription = "停止生成",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        } else {
-            FilledIconButton(
-                onClick = onSend,
-                enabled = textFieldState.text.isNotEmpty(),
-                shape = CircleShape,
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_send),
-                    contentDescription = "发送",
-                    modifier = Modifier.size(20.dp)
-                )
+        AnimatedContent(
+            targetState = sending,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(160)) togetherWith fadeOut(animationSpec = tween(160))
+            },
+            label = "sendStopSwitch"
+        ) { isSending ->
+            if (isSending) {
+                IconButton(
+                    onClick = {
+                        haptic.click()
+                        viewModel.stop()
+                    },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_close),
+                        contentDescription = "停止生成",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            } else {
+                FilledIconButton(
+                    onClick = onSend,
+                    enabled = textFieldState.text.isNotEmpty(),
+                    shape = CircleShape,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_send),
+                        contentDescription = "发送",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }
@@ -766,18 +846,7 @@ private fun ChatBubble(
             val text = if (truncated) fullText.take(MAX_DISPLAY_CHARS) + "…" else fullText
             when {
                 liveText != null && liveText.isEmpty() -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = "正在思考…",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    TypingIndicator()
                 }
                 isUser -> Text(
                     text = text,
