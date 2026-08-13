@@ -70,7 +70,7 @@ private val bottomDestinations = listOf(
  * - 底栏 [NavigationBar] 始终组合（仅系统 IME 可见时隐藏，被系统键盘盖住），
  *   内置键盘弹出时**不再移除底栏**，而是由根层 [InAppKeyboardOverlay] 盖在底栏之上，
  *   杜绝「底栏移除→重现」的视觉抖动。
- * - 键盘常驻组合 + graphicsLayer 位移切换（开/关不重新组成/重测量），
+ * - 键盘常驻组合 + offset 布局位移切换（背景+内容+命中区域整体移动，lambda 延迟读取不重组），
  *   键盘由页面点击输入框才弹出（默认收起），不自动弹出。
  * - 输入行/列表抬升量 = 页面内容底（nav host 实测）− 键盘覆盖层顶（Column 实测），
  *   两者同用 positionInRoot 坐标系，构造上精确，消除 inset/padding 推导误差。
