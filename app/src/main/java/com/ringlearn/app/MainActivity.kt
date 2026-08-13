@@ -20,7 +20,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // 内置键盘模式不依赖系统 IME insets；adjustResize 会放大 insets 误报（幻影留白根因，
-        // SO 76014880 / IssueTracker 388616191）。显式覆盖 enableEdgeToEdge 的默认 softInputMode。
+        // SO 76014880 / IssueTracker 388616191）。Manifest 已声明 adjustNothing，这里再显式固定一次
+        // 作为防御（已验证 androidx.activity 1.13.0 的 EdgeToEdge.enable 不触碰 softInputMode，
+        // 但保留显式调用以防未来版本改变默认行为）。
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
         setContent {
             val rootViewModel: RootViewModel = hiltViewModel()

@@ -89,7 +89,8 @@ fun RingLearnApp() {
 
     // 注意：字段聚焦时 WindowInsets.isImeVisible 可能误报 true（系统 IME insets 层怪癖），
     // 因此仅当处于系统输入法模式（!useInAppKeyboard）时才据此隐藏底栏。
-    val systemImeVisible = WindowInsets.isImeVisible
+    // 条件读取同时避免内置键盘模式订阅 IME insets：本机聚焦时会误报非零，否则引发整根重组。
+    val systemImeVisible = if (useInAppKeyboard) false else WindowInsets.isImeVisible
     val hideDock = systemImeVisible && !useInAppKeyboard
 
     // 稳定 entryProvider 身份：避免根重组重建全部 NavEntry 导致页面整树重组合
