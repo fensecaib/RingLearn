@@ -73,7 +73,7 @@ fun StudyScreen(
     }
 
     // 实时计时器：仅在学习 Tab 处于激活态时更新，避免 keep-alive 下隐藏时每秒重组
-    val activeRoute = LocalActiveRoute.current
+    val activeRoute = LocalActiveRoute.current.value
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
     LaunchedEffect(uiState.sessionStartAt, uiState.roundFinished, activeRoute) {
         while (uiState.sessionStartAt > 0 && !uiState.roundFinished) {

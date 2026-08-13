@@ -58,7 +58,7 @@ adb -s 01772412127937 install -r app\build\outputs\apk\debug\app-debug.apk
 2. **输入抬升量公式**：`lift = pageContentBottomPx - overlayTopPx`——nav host 与覆盖层 Column 用 `positionInRoot()` **同坐标系实测**（RingLearnApp / InAppImeController）。不要改回 `keyboardHeightPx - dockHeightPx` 推导（有 inset 偏差）。
 3. **纯离线约束**：除 AI 对话外全部离线。真机**无 Google Play services**（UROVO i6310 Pro）——凡依赖 GMS 的方案（ML Kit 等）不可用。动画/TTS/手写用系统 API 或自研，零重型第三方库。
 4. **AI 对话**：OpenAI 兼容 + SSE 流式 + **完整上下文（不压缩）**；API Key 绝不入库（DataStore + Keystore AES/GCM）。
-5. **性能不变量**：`KeepAliveNavHost` 6 Tab 常驻组合；首页火焰动画仅首页激活时运行；AI 流式节流（80ms/16 字符）且结束必 flush；候选栏空态收起（纯 fade）。弱机（i6310 Pro）16.6ms 预算难达成，以「优化前后相对变化」验收。
+5. **性能不变量**：`KeepAliveNavHost` 6 Tab 常驻组合；首页火焰动画仅首页激活时运行；AI 流式节流（80ms/16 字符）且结束必 flush；候选栏空态收起（纯 fade）。根层禁止直接读 `navigationState.topLevelRoute`（用稳定 `State<NavKey>` 经 `LocalActiveRoute` 在叶子作用域读 `.value`，切 Tab 不重组整棵根树）；页面顶层禁止集中收集多个高频 StateFlow（在子组合内收集，键入/发送/模式切换只重组对应区域）；`InAppImeController` 保持 `@Stable`（属性全为 snapshot state）。弱机（i6310 Pro）16.6ms 预算难达成，以「优化前后相对变化」验收。
 
 ## 5. 真机测试与工具
 

@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +28,6 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import com.ringlearn.app.R
 import com.ringlearn.app.ui.LocalActiveRoute
-import com.ringlearn.app.ui.LocalActiveTabIsHome
 import com.ringlearn.app.ui.RootViewModel
 import com.ringlearn.app.ui.home.HomeScreen
 import com.ringlearn.app.ui.ime.InAppImeController
@@ -122,16 +122,14 @@ fun RingLearnApp() {
         }
     }
 
-    // 返回键：非首页 Tab 优先回首页（NavDisplay.onBack 的替代实现）
-    BackHandler(enabled = navigationState.topLevelRoute != HomeKey) {
-        navigator.goBack()
-    }
-
     CompositionLocalProvider(
         LocalInAppImeController provides inAppImeController,
-        LocalActiveTabIsHome provides (navigationState.topLevelRoute == HomeKey),
-        LocalActiveRoute provides navigationState.topLevelRoute
+        // 提供稳定的 State 对象而非当前路由值：根体不再读 topLevelRoute，
+        // Tab 切换只重组「真正读取 .value 的叶子」，根 Scaffold/覆盖层保持不重组。
+        LocalActiveRoute provides navigationState.topLevelRouteState
     ) {
+        // 返回键：非首页 Tab 优先回首页（NavDisplay.onBack 的替代实现）
+        AppBackHandler(navigationState)
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.BottomCenter
@@ -144,18 +142,22 @@ fun RingLearnApp() {
                     if (!hideDock) {
                         NavigationBar() {
                             bottomDestinations.forEach { destination ->
-                                val selected = destination.key == navigationState.topLevelRoute
-                                NavigationBarItem(
-                                    selected = selected,
-                                    onClick = { navigator.navigate(destination.key) },
-                                    icon = {
-                                        Icon(
-                                            painter = painterResource(destination.iconRes),
-                                            contentDescription = destination.label
-                                        )
-                                    },
-                                    label = { Text(destination.label) }
-                                )
+                                key(destination.key) {
+                                    // 每个 item 独立作用域读路由：切 Tab 只重组受影响的 item
+                                    val selected =
+                                        LocalActiveRoute.current.value == destination.key
+                                    NavigationBarItem(
+                                        selected = selected,
+                                        onClick = { navigator.navigate(destination.key) },
+                                        icon = {
+                                            Icon(
+                                                painter = painterResource(destination.iconRes),
+                                                contentDescription = destination.label
+                                            )
+                                        },
+                                        label = { Text(destination.label) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -172,7 +174,7 @@ fun RingLearnApp() {
                                 (coords.positionInRoot().y + coords.size.height).roundToInt()
                         },
                     entries = navigationState.toAllEntries(entryProvider),
-                    topLevelRoute = navigationState.topLevelRoute,
+                    topLevelRoute = navigationState.topLevelRouteState,
                     initialRoute = HomeKey
                 )
             }
@@ -181,5 +183,17 @@ fun RingLearnApp() {
                 controller = inAppImeController
             )
         }
+    }
+}
+
+/**
+ * 返回键处理：独立组合作用域自读激活路由，避免根体订阅 topLevelRoute。
+ */
+@Composable
+private fun AppBackHandler(navigationState: NavigationState) {
+    val navigator = remember(navigationState) { Navigator(navigationState) }
+    val isHome = LocalActiveRoute.current.value == HomeKey
+    BackHandler(enabled = !isHome) {
+        navigator.goBack()
     }
 }

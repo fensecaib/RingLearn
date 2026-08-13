@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,7 +29,11 @@ import kotlin.math.roundToInt
 
 /**
  * 内置键盘覆盖层控制器：由查词/生词本页在键盘激活时绑定，根层 [InAppKeyboardOverlay] 读取并渲染。
+ *
+ * @Stable：全部公开属性均为 snapshot state（MutableState/MutableIntState），
+ * 满足稳定性契约；标注后 InAppKeyboardOverlay 等下游可在父级重组时跳过自身重组。
  */
+@Stable
 class InAppImeController {
     /** 非空 = 覆盖层可见（指向当前活动页面的 IME 状态） */
     var ime: RingLearnImeState? by mutableStateOf(null)

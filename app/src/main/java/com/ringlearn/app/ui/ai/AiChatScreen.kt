@@ -6,6 +6,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -64,6 +66,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,10 +79,13 @@ import com.ringlearn.app.ui.components.EmptyState
 import com.ringlearn.app.ui.ime.InAppImeBinding
 import com.ringlearn.app.ui.ime.LocalInAppImeController
 import com.ringlearn.app.ui.ime.RingLearnImeField
+import com.ringlearn.app.ui.ime.RingLearnImeState
 import com.ringlearn.app.ui.ime.contentOverflowDp
 import com.ringlearn.app.ui.ime.dismissInAppImeOnTap
 import com.ringlearn.app.ui.ime.rememberRingLearnImeState
 import com.ringlearn.app.ui.rememberHapticManager
+import com.ringlearn.app.util.HapticManager
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -91,7 +97,6 @@ fun AiChatScreen(
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val config by viewModel.config.collectAsStateWithLifecycle()
-    val sending by viewModel.sending.collectAsStateWithLifecycle()
     val useInAppKeyboard by viewModel.useInAppKeyboard.collectAsStateWithLifecycle()
     val haptic = rememberHapticManager()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -150,7 +155,7 @@ fun AiChatScreen(
     // 发送：读取输入框文本并清空
     val sendCurrent: () -> Unit = {
         val text = textFieldState.text.toString().trim()
-        if (text.isNotEmpty() && !sending) {
+        if (text.isNotEmpty() && !viewModel.sending.value) {
             haptic.click()
             viewModel.send(text)
             textFieldState.edit { replace(0, length, "") }
@@ -244,119 +249,32 @@ fun AiChatScreen(
             if (showContextInfo) {
                 ContextInfoBanner(viewModel = viewModel, onClose = { showContextInfo = false })
             }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .dismissInAppImeOnTap(enabled = keyboardVisible, onDismiss = collapseKeyboard)
-            ) {
-                if (messages.isEmpty() && !sending) {
-                    EmptyState(
-                        iconRes = R.drawable.ic_ai,
-                        title = "开始 AI 对话",
-                        subtitle = "发送日语或中文句子，AI 帮你翻译、讲解语法、解析单词。\n配置与 API Key 在右上角设置中完成。",
-                        actionLabel = "打开设置",
-                        onAction = { showSettings = true }
-                    )
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        // 短会话贴底（聊天范式）：内容不足视口时整体贴底，键盘收起后原键盘区域不留白；
-                        // 内容≥视口时无剩余空间，排列不生效，滚动/吸底逻辑不变。
-                        verticalArrangement = Arrangement.Bottom,
-                        contentPadding = PaddingValues(
-                            start = 12.dp, top = 8.dp, end = 12.dp,
-                            bottom = 12.dp
-                        )
-                    ) {
-                        if (hasMoreOlder) {
-                            item(key = "load_older") { LoadMoreItem() }
-                        }
-                        val lastId = messages.lastOrNull()?.id
-                        items(messages, key = { it.id }) { msg ->
-                            if (msg.id == lastId) {
-                                // 最后一条（助手流式）在此订阅 streamingText：增量只重组本气泡，避免整屏重组
-                                StreamingBubble(
-                                    viewModel = viewModel,
-                                    message = msg,
-                                    onRetry = viewModel::retry
-                                )
-                            } else {
-                                ChatBubble(
-                                    message = msg,
-                                    liveText = null,
-                                    onRetry = viewModel::retry
-                                )
-                            }
-                        }
-                    }
-                }
-                // 浮动「回到底部」圆钮：不在最后一条时显示（↑ 已移除）
-                val atBottom by remember { derivedStateOf {
-                    val info = listState.layoutInfo
-                    info.totalItemsCount == 0 ||
-                        ((info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= lastMessageIndex(hasMoreOlder, messages.size))
-                } }
-                if (!atBottom) {
-                    SmallFloatingActionButton(
-                        onClick = {
-                            haptic.click()
-                            scope.launch { listState.scrollToItem(lastMessageIndex(hasMoreOlder, messages.size)) }
-                        },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 12.dp, bottom = 12.dp)
-                    ) { Text("↓", style = MaterialTheme.typography.titleMedium) }
-                }
-            }
-            // 输入区：复用内置罗马音键盘 / 系统输入法
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // 内置键盘弹出时抬升到键盘（含候选栏）正上方，避免遮挡输入框
-                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = if (imeActive) contentOverflowDp + 6.dp else 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RingLearnImeField(
-                    ime = ime,
-                    useInAppKeyboard = useInAppKeyboard,
-                    modifier = Modifier.weight(1f),
-                    placeholder = "输入句子，问问 AI…",
-                    keyboardVisible = keyboardVisible,
-                    onSwitchToInAppKeyboard = viewModel::switchToInAppKeyboard,
-                    onShowKeyboard = {
-                        haptic.click()
-                        keyboardVisible = true
-                    }
-                )
-                Spacer(Modifier.width(8.dp))
-                if (sending) {
-                    IconButton(onClick = {
-                        haptic.click()
-                        viewModel.stop()
-                    }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_close),
-                            contentDescription = "停止生成",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                } else {
-                    IconButton(
-                        onClick = sendCurrent,
-                        enabled = textFieldState.text.isNotEmpty()
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_send),
-                            contentDescription = "发送",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-            }
+            AiMessagesArea(
+                viewModel = viewModel,
+                messages = messages,
+                hasMoreOlder = hasMoreOlder,
+                listState = listState,
+                haptic = haptic,
+                scope = scope,
+                keyboardVisible = keyboardVisible,
+                onDismissKeyboard = collapseKeyboard,
+                onShowSettings = { showSettings = true }
+            )
+            // 输入区：内部订阅 sending / 文本非空，发送/停止切换与键入只重组输入行
+            AiInputBar(
+                viewModel = viewModel,
+                ime = ime,
+                textFieldState = textFieldState,
+                haptic = haptic,
+                useInAppKeyboard = useInAppKeyboard,
+                keyboardVisible = keyboardVisible,
+                onShowKeyboard = {
+                    haptic.click()
+                    keyboardVisible = true
+                },
+                onSend = sendCurrent,
+                bottomPadding = if (imeActive) contentOverflowDp + 6.dp else 8.dp
+            )
         }
     }
     }
@@ -389,6 +307,147 @@ fun AiChatScreen(
                 TextButton(onClick = { showResetConfirm = false }) { Text("取消") }
             }
         )
+    }
+}
+
+/** 消息区：内部订阅 sending（空态判定），消息/流式增量不触发整屏重组。 */
+@Composable
+private fun ColumnScope.AiMessagesArea(
+    viewModel: AiChatViewModel,
+    messages: List<AiChatEntity>,
+    hasMoreOlder: Boolean,
+    listState: LazyListState,
+    haptic: HapticManager,
+    scope: CoroutineScope,
+    keyboardVisible: Boolean,
+    onDismissKeyboard: () -> Unit,
+    onShowSettings: () -> Unit
+) {
+    val sending by viewModel.sending.collectAsStateWithLifecycle()
+    Box(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .dismissInAppImeOnTap(enabled = keyboardVisible, onDismiss = onDismissKeyboard)
+    ) {
+        if (messages.isEmpty() && !sending) {
+            EmptyState(
+                iconRes = R.drawable.ic_ai,
+                title = "开始 AI 对话",
+                subtitle = "发送日语或中文句子，AI 帮你翻译、讲解语法、解析单词。\n配置与 API Key 在右上角设置中完成。",
+                actionLabel = "打开设置",
+                onAction = onShowSettings
+            )
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                // 短会话贴底（聊天范式）：内容不足视口时整体贴底，键盘收起后原键盘区域不留白；
+                // 内容≥视口时无剩余空间，排列不生效，滚动/吸底逻辑不变。
+                verticalArrangement = Arrangement.Bottom,
+                contentPadding = PaddingValues(
+                    start = 12.dp, top = 8.dp, end = 12.dp,
+                    bottom = 12.dp
+                )
+            ) {
+                if (hasMoreOlder) {
+                    item(key = "load_older") { LoadMoreItem() }
+                }
+                val lastId = messages.lastOrNull()?.id
+                items(messages, key = { it.id }) { msg ->
+                    if (msg.id == lastId) {
+                        // 最后一条（助手流式）在此订阅 streamingText：增量只重组本气泡，避免整屏重组
+                        StreamingBubble(
+                            viewModel = viewModel,
+                            message = msg,
+                            onRetry = viewModel::retry
+                        )
+                    } else {
+                        ChatBubble(
+                            message = msg,
+                            liveText = null,
+                            onRetry = viewModel::retry
+                        )
+                    }
+                }
+            }
+        }
+        // 浮动「回到底部」圆钮：不在最后一条时显示（↑ 已移除）
+        val atBottom by remember { derivedStateOf {
+            val info = listState.layoutInfo
+            info.totalItemsCount == 0 ||
+                ((info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= lastMessageIndex(hasMoreOlder, messages.size))
+        } }
+        if (!atBottom) {
+            SmallFloatingActionButton(
+                onClick = {
+                    haptic.click()
+                    scope.launch { listState.scrollToItem(lastMessageIndex(hasMoreOlder, messages.size)) }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = 12.dp)
+            ) { Text("↓", style = MaterialTheme.typography.titleMedium) }
+        }
+    }
+}
+
+/** 输入行：内部订阅 sending 与文本非空，发送/停止切换、每次键入只重组本行。 */
+@Composable
+private fun AiInputBar(
+    viewModel: AiChatViewModel,
+    ime: RingLearnImeState,
+    textFieldState: TextFieldState,
+    haptic: HapticManager,
+    useInAppKeyboard: Boolean,
+    keyboardVisible: Boolean,
+    onShowKeyboard: () -> Unit,
+    onSend: () -> Unit,
+    bottomPadding: Dp
+) {
+    val sending by viewModel.sending.collectAsStateWithLifecycle()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 内置键盘弹出时抬升到键盘（含候选栏）正上方，避免遮挡输入框
+            .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = bottomPadding),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RingLearnImeField(
+            ime = ime,
+            useInAppKeyboard = useInAppKeyboard,
+            modifier = Modifier.weight(1f),
+            placeholder = "输入句子，问问 AI…",
+            keyboardVisible = keyboardVisible,
+            onSwitchToInAppKeyboard = viewModel::switchToInAppKeyboard,
+            onShowKeyboard = onShowKeyboard
+        )
+        Spacer(Modifier.width(8.dp))
+        if (sending) {
+            IconButton(onClick = {
+                haptic.click()
+                viewModel.stop()
+            }) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_close),
+                    contentDescription = "停止生成",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        } else {
+            IconButton(
+                onClick = onSend,
+                enabled = textFieldState.text.isNotEmpty()
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_send),
+                    contentDescription = "发送",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
     }
 }
 

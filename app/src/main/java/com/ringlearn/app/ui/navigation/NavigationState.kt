@@ -2,6 +2,7 @@ package com.ringlearn.app.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,12 @@ class NavigationState(
     topLevelRoute: MutableState<NavKey>,
     val backStacks: Map<NavKey, NavBackStack<NavKey>>
 ) {
+    /**
+     * 稳定的 State 引用（提供一次不再变）：供叶子作用域延迟读 `.value`，
+     * 避免根层直接读 topLevelRoute 导致每次切 Tab 重组整棵根树。
+     */
+    val topLevelRouteState: State<NavKey> = topLevelRoute
+
     var topLevelRoute: NavKey by topLevelRoute
 }
 
@@ -85,10 +92,13 @@ fun NavigationState.toAllEntries(
     entryProvider: (NavKey) -> NavEntry<NavKey>
 ): List<Pair<NavKey, NavEntry<NavKey>>> {
     val decoratedEntries = backStacks.mapValues { (_, stack) ->
-        val decorators = listOf(
-            rememberSaveableStateHolderNavEntryDecorator<NavKey>(),
-            rememberViewModelStoreNavEntryDecorator<NavKey>()
-        )
+        // decorator 先各自 remember，再用 remember 稳定列表身份：否则每次重组新建 listOf，
+        // rememberDecoratedNavEntries 会把全部条目重新装饰一遍（切 Tab 分配churn来源之一）。
+        val saveableDecorator = rememberSaveableStateHolderNavEntryDecorator<NavKey>()
+        val viewModelDecorator = rememberViewModelStoreNavEntryDecorator<NavKey>()
+        val decorators = remember(saveableDecorator, viewModelDecorator) {
+            listOf(saveableDecorator, viewModelDecorator)
+        }
         rememberDecoratedNavEntries(
             backStack = stack,
             entryDecorators = decorators,

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -23,10 +24,10 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.delay
 
 /** 错峰预热初始延迟（ms）：在首屏渲染 / TTFD 上报完成后执行 */
-private const val PREWARM_INITIAL_DELAY_MS = 1200L
+private const val PREWARM_INITIAL_DELAY_MS = 600L
 
 /** 错峰预热相邻两个 Tab 组合的间隔（ms） */
-private const val PREWARM_STEP_MS = 350L
+private const val PREWARM_STEP_MS = 250L
 
 /**
  * 常驻 Tab 宿主：替代 NavDisplay，让所有已访问 Tab 保持组合。
@@ -42,9 +43,11 @@ private const val PREWARM_STEP_MS = 350L
 fun KeepAliveNavHost(
     modifier: Modifier = Modifier,
     entries: List<Pair<NavKey, NavEntry<NavKey>>>,
-    topLevelRoute: NavKey,
+    topLevelRoute: State<NavKey>,
     initialRoute: NavKey
 ) {
+    // 只在本宿主作用域读路由值：切 Tab 只重组本宿主，根层不再随切换重组。
+    val currentRoute = topLevelRoute.value
     // visitedRoutes 可保存：旋转/进程重建后已访问 Tab 保持常驻，不再重新组合
     val routeLookup = remember(entries) { entries.associate { it.first.toString() to it.first } }
     val visitedSaver = remember(routeLookup) {
@@ -56,9 +59,9 @@ fun KeepAliveNavHost(
     var visitedRoutes by rememberSaveable(stateSaver = visitedSaver) {
         mutableStateOf(setOf(initialRoute))
     }
-    LaunchedEffect(topLevelRoute) {
-        if (topLevelRoute !in visitedRoutes) {
-            visitedRoutes = visitedRoutes + topLevelRoute
+    LaunchedEffect(currentRoute) {
+        if (currentRoute !in visitedRoutes) {
+            visitedRoutes = visitedRoutes + currentRoute
         }
     }
     // 空闲错峰预热：首屏渲染完成（TTFD 上报后）再按间隔逐个预组合未访问 Tab，
@@ -81,11 +84,10 @@ fun KeepAliveNavHost(
         entries.forEach { (route, entry) ->
             if (route in visitedRoutes) {
                 key(route) {
-                    val active = route == topLevelRoute
+                    val active = route == currentRoute
                     // 单一 Box 调用点：切换时仅改变 Modifier，避免分支交换导致内容子树被销毁/重建
-                    val inputBlock = if (active) {
-                        Modifier
-                    } else {
+                    // 非激活拦截链 remember 缓存一次：切换时不再重建 Modifier 链（减少分配 churn）
+                    val inactiveBlock = remember(route) {
                         Modifier
                             .clearAndSetSemantics {}
                             .pointerInput(route) {
@@ -111,7 +113,7 @@ fun KeepAliveNavHost(
                             .fillMaxSize()
                             .zIndex(if (active) 1f else 0f)
                             .graphicsLayer { alpha = if (active) 1f else 0f }
-                            .then(inputBlock),
+                            .then(if (active) Modifier else inactiveBlock),
                         content = content
                     )
                 }

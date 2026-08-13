@@ -64,10 +64,11 @@ import com.ringlearn.app.R
 import com.ringlearn.app.domain.model.AppSettings
 import com.ringlearn.app.domain.model.ThemeMode
 import com.ringlearn.app.ui.components.CircularProgressRing
-import com.ringlearn.app.ui.LocalActiveTabIsHome
+import com.ringlearn.app.ui.LocalActiveRoute
 import com.ringlearn.app.ui.components.EmptyState
 import com.ringlearn.app.ui.components.FlameIcon
 import com.ringlearn.app.ui.components.LoadingState
+import com.ringlearn.app.ui.navigation.HomeKey
 import com.ringlearn.app.ui.rememberHapticManager
 import com.ringlearn.app.util.HapticManager
 import kotlin.math.roundToInt
@@ -367,7 +368,10 @@ private fun StreakCard(streakDays: Int, modifier: Modifier = Modifier) {
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FlameIcon(modifier = Modifier.size(40.dp), active = LocalActiveTabIsHome.current)
+            FlameIcon(
+                modifier = Modifier.size(40.dp),
+                active = LocalActiveRoute.current.value == HomeKey
+            )
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(
