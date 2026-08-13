@@ -72,6 +72,7 @@ import com.ringlearn.app.ui.components.EmptyState
 import com.ringlearn.app.ui.ime.InAppImeBinding
 import com.ringlearn.app.ui.ime.LocalInAppImeController
 import com.ringlearn.app.ui.ime.contentOverflowDp
+import com.ringlearn.app.ui.ime.dismissInAppImeOnTap
 import com.ringlearn.app.ui.ime.RingLearnImeField
 import com.ringlearn.app.ui.ime.rememberRingLearnImeState
 import com.ringlearn.app.ui.rememberHapticManager
@@ -124,10 +125,11 @@ fun LookupScreen(
 
     // 内置键盘默认收起（点击输入框才弹出，类真实 IME）；由根层 InAppKeyboardOverlay 覆盖渲染
     var keyboardVisible by rememberSaveable { mutableStateOf(false) }
-    BackHandler(enabled = keyboardVisible) {
+    val collapseKeyboard = {
         haptic.click()
         keyboardVisible = false
     }
+    BackHandler(enabled = keyboardVisible, onBack = collapseKeyboard)
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -148,10 +150,7 @@ fun LookupScreen(
             ime = ime,
             candidates = imeDictionaryCandidates,
             active = imeActive,
-            onCollapse = {
-                haptic.click()
-                keyboardVisible = false
-            }
+            onCollapse = collapseKeyboard
         )
         val contentOverflowDp = inAppImeController.contentOverflowDp()
         Column(
@@ -245,6 +244,7 @@ fun LookupScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .dismissInAppImeOnTap(enabled = keyboardVisible, onDismiss = collapseKeyboard)
             ) {
                 when {
                     query.isBlank() -> EmptyState(
@@ -526,5 +526,3 @@ private fun WordLookupCard(
         }
     }
 }
-
-

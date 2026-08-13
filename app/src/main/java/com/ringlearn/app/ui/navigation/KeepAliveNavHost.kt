@@ -16,12 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.zIndex
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
-import com.ringlearn.app.ui.ime.LocalInAppImeController
 import kotlinx.coroutines.delay
 
 /** 错峰预热初始延迟（ms）：在首屏渲染 / TTFD 上报完成后执行 */
@@ -77,22 +75,9 @@ fun KeepAliveNavHost(
         }
     }
 
-    // 外点收起（类真实 IME）：键盘可见时，落在页面内容区的任何按下都触发收起回调；
-    // Initial  pass 且不 consume，滚动/点按穿透不受影响；键盘覆盖层在宿主之外且自行消费事件，点键盘不触发。
-    val imeController = LocalInAppImeController.current
-    Box(
-        modifier = modifier.pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    // 仅在手势按下（Press）时收起：若对 UP 也响应，会把同一次点按刚打开的键盘立即收起。
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    if (event.type == PointerEventType.Press && imeController.ime != null) {
-                        imeController.onCollapse?.invoke()
-                    }
-                }
-            }
-        }
-    ) {
+    // 外点收起不再挂在宿主 Box（宿主级 Initial pass 处理器在真机上不触发，见 933deb4 回归），
+    // 改为各页内容区挂 dismissInAppImeOnTap（见 AiChatScreen / LookupScreen / WordBookScreen）。
+    Box(modifier = modifier) {
         entries.forEach { (route, entry) ->
             if (route in visitedRoutes) {
                 key(route) {

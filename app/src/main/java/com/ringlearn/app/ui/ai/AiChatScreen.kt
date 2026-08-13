@@ -77,6 +77,7 @@ import com.ringlearn.app.ui.ime.InAppImeBinding
 import com.ringlearn.app.ui.ime.LocalInAppImeController
 import com.ringlearn.app.ui.ime.RingLearnImeField
 import com.ringlearn.app.ui.ime.contentOverflowDp
+import com.ringlearn.app.ui.ime.dismissInAppImeOnTap
 import com.ringlearn.app.ui.ime.rememberRingLearnImeState
 import com.ringlearn.app.ui.rememberHapticManager
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -105,10 +106,11 @@ fun AiChatScreen(
 
     val textFieldState = remember { TextFieldState() }
     var keyboardVisible by rememberSaveable { mutableStateOf(false) }
-    BackHandler(enabled = keyboardVisible) {
+    val collapseKeyboard = {
         haptic.click()
         keyboardVisible = false
     }
+    BackHandler(enabled = keyboardVisible, onBack = collapseKeyboard)
 
     // 滚动到底：首次加载/新消息追加（末条 id 变化）时，靠近底部则钉到最后一条（考虑「加载更早」哨兵 index 0）
     var lastBottomId by remember { mutableStateOf<Long?>(null) }
@@ -226,10 +228,7 @@ fun AiChatScreen(
             ime = ime,
             candidates = emptyList(),
             active = imeActive,
-            onCollapse = {
-                haptic.click()
-                keyboardVisible = false
-            }
+            onCollapse = collapseKeyboard
         )
         val contentOverflowDp = inAppImeController.contentOverflowDp()
 
@@ -245,7 +244,12 @@ fun AiChatScreen(
             if (showContextInfo) {
                 ContextInfoBanner(viewModel = viewModel, onClose = { showContextInfo = false })
             }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .dismissInAppImeOnTap(enabled = keyboardVisible, onDismiss = collapseKeyboard)
+            ) {
                 if (messages.isEmpty() && !sending) {
                     EmptyState(
                         iconRes = R.drawable.ic_ai,
