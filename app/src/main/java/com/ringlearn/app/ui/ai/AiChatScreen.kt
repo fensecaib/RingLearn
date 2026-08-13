@@ -614,7 +614,22 @@ private fun AiInputBar(
             keyboardVisible = keyboardVisible,
             onSwitchToInAppKeyboard = viewModel::switchToInAppKeyboard,
             onShowKeyboard = onShowKeyboard,
-            maxLines = 4
+            maxLines = 4,
+            trailingIcon = {
+                if (textFieldState.text.isNotEmpty()) {
+                    IconButton(onClick = {
+                        haptic.click()
+                        textFieldState.edit { replace(0, length, "") }
+                    }) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_close),
+                            contentDescription = "清空",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
         )
         Spacer(Modifier.width(8.dp))
         AnimatedContent(

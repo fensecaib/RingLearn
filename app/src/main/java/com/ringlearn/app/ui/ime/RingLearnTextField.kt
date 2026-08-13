@@ -124,6 +124,11 @@ class RingLearnImeState internal constructor(
                 if (engine.isComposing) engine.commit()
                 syncFromEngine()
                 onCommit()
+                // onCommit 可能清空了字段（如 AI 发送）：同步收养外部文本，避免尾部 syncFromEngine
+                // 把尚未重置的引擎旧文本写回输入框（异步 snapshotFlow 收养来不及生效导致回写）。
+                if (state.text.toString() != engine.fullText) {
+                    adoptExternalText(state.text.toString())
+                }
             }
         }
         syncFromEngine()
