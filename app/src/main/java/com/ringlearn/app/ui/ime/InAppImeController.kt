@@ -44,8 +44,13 @@ class InAppImeController {
     /** 收起回调（页面设置：收起键盘） */
     var onCollapse: (() -> Unit)? = null
 
-    /** 键盘覆盖层实测高度（px，含导航栏 padding；键盘常驻组合，测量稳定） */
-    var keyboardHeightPx by mutableIntStateOf(0)
+    /**
+     * 键盘覆盖层完整列高（px，含底部导航栏 padding；常驻组合，测量稳定）。
+     * 只用于隐藏位移：列高测量必须位于 navigationBarsPadding 外侧，
+     * 而 surfaceContainer 背景必须位于其内侧（键盘表面止于系统导航栏上沿，
+     * 不被手势条/底部导航条覆盖）；两者顺序破坏都会造成底部残留或导航条压键盘的回归。
+     */
+    var overlayFullHeightPx by mutableIntStateOf(0)
 
     /** 页面内容底边在根坐标系中的 y（px）：由根层 nav host onGloballyPositioned 实测。 */
     var pageContentBottomPx by mutableIntStateOf(0)
@@ -68,7 +73,7 @@ val LocalInAppImeController = staticCompositionLocalOf<InAppImeController> {
  * - 隐藏时必须整体（背景 + 内容 + 命中区域）移出屏幕：graphicsLayer 只影响绘制，会把背景
  *   残留在原布局位置并继续拦截下半屏触摸；offset 是布局修饰符，三者同步移动，不残留留白/拦截层。
  * - `navigationBarsPadding()` 让内容停在系统导航栏之上，完整 4 排。
- * - 实测高度 [InAppImeController.keyboardHeightPx] 供根层推导列表让位量（QWERTY/五十音/候选栏自适应）。
+ * - 实测完整列高 [InAppImeController.overlayFullHeightPx]（含底部导航栏 padding）仅用于隐藏位移。
  */
 @Composable
 fun InAppKeyboardOverlay(
@@ -91,10 +96,10 @@ fun InAppKeyboardOverlay(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset { IntOffset(0, if (visible) 0 else controller.keyboardHeightPx) }
-                    // 测量放在 navigationBarsPadding 外侧：keyboardHeightPx = 「内容 + 底部导航栏
+                    .offset { IntOffset(0, if (visible) 0 else controller.overlayFullHeightPx) }
+                    // 测量放在 navigationBarsPadding 外侧：overlayFullHeightPx = 「内容 + 底部导航栏
                     // padding」的完整列高，收起时整体移出屏幕（否则残留 padding 高度）。
-                    .onSizeChanged { controller.keyboardHeightPx = it.height }
+                    .onSizeChanged { controller.overlayFullHeightPx = it.height }
                     .onGloballyPositioned { coords -> controller.overlayTopPx = coords.positionInRoot().y.roundToInt() }
                     .navigationBarsPadding()
                     // 表面背景放在 navigationBarsPadding 内侧：键盘表面止于系统导航栏（手势条 /
