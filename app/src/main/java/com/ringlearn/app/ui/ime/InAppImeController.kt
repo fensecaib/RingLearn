@@ -92,10 +92,14 @@ fun InAppKeyboardOverlay(
                 modifier = Modifier
                     .fillMaxWidth()
                     .offset { IntOffset(0, if (visible) 0 else controller.keyboardHeightPx) }
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .navigationBarsPadding()
+                    // 测量放在 navigationBarsPadding 外侧：keyboardHeightPx = 「内容 + 底部导航栏
+                    // padding」的完整列高，收起时整体移出屏幕（否则残留 padding 高度）。
                     .onSizeChanged { controller.keyboardHeightPx = it.height }
                     .onGloballyPositioned { coords -> controller.overlayTopPx = coords.positionInRoot().y.roundToInt() }
+                    .navigationBarsPadding()
+                    // 表面背景放在 navigationBarsPadding 内侧：键盘表面止于系统导航栏（手势条 /
+                    // 全面屏底部导航条）上沿，避免系统导航条覆盖显示在键盘之上。
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
             ) {
                 RingLearnImeCandidateBar(
                     ime = ime,
