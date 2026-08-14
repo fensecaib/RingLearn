@@ -5,8 +5,10 @@
 
 package com.ringlearn.app.ui.ime
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -37,7 +39,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.PlatformTextInputInterceptor
@@ -204,11 +209,19 @@ fun RingLearnImeField(
     keyboardVisible: Boolean = true,
     onShowKeyboard: (() -> Unit)? = null,
     maxLines: Int = 1,
-    minHeight: Dp = 52.dp
+    minHeight: Dp = 52.dp,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    containerShape: Shape = RoundedCornerShape(16.dp),
+    containerBorder: BorderStroke? = null,
+    glowColor: Color = Color.Transparent,
+    glowElevation: Dp = 0.dp,
+    accentColor: Color = MaterialTheme.colorScheme.primary,
+    textColor: Color = MaterialTheme.colorScheme.onSurface,
+    placeholderColor: Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
     // 组合区下划线（公开 API：OutputTransformation + addStyle，lambda 接收者为 TextFieldBuffer）
     val compositionStyle = SpanStyle(
-        color = MaterialTheme.colorScheme.primary,
+        color = accentColor,
         textDecoration = TextDecoration.Underline
     )
     val outputTransformation = OutputTransformation {
@@ -221,9 +234,28 @@ fun RingLearnImeField(
         modifier = modifier
             .fillMaxWidth()
             .then(if (maxLines > 1) Modifier.heightIn(min = minHeight) else Modifier.height(minHeight))
+            .then(
+                if (glowElevation > 0.dp) {
+                    Modifier.shadow(
+                        elevation = glowElevation,
+                        shape = containerShape,
+                        ambientColor = glowColor,
+                        spotColor = glowColor
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .background(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(16.dp)
+                color = containerColor,
+                shape = containerShape
+            )
+            .then(
+                if (containerBorder != null) {
+                    Modifier.border(containerBorder, containerShape)
+                } else {
+                    Modifier
+                }
             )
             .padding(horizontal = 14.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -235,7 +267,7 @@ fun RingLearnImeField(
             if (ime.state.text.isEmpty() && placeholder.isNotEmpty()) {
                 Text(
                     text = placeholder,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = placeholderColor,
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -249,9 +281,9 @@ fun RingLearnImeField(
                         TextFieldLineLimits.SingleLine
                     },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = textColor
                     ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    cursorBrush = SolidColor(accentColor),
                     outputTransformation = outputTransformation
                 )
             }

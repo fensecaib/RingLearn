@@ -29,5 +29,7 @@ captures/
 # Misc temp
 *.tmp
 *~
+__pycache__/
+*.pyc
 # Agent-local config / skills (not versioned)
 .codex/

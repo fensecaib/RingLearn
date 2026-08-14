@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
@@ -18,6 +19,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,13 +47,14 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -77,17 +81,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ringlearn.app.R
@@ -102,7 +114,11 @@ import com.ringlearn.app.ui.ime.RingLearnImeState
 import com.ringlearn.app.ui.ime.contentOverflowDp
 import com.ringlearn.app.ui.ime.dismissInAppImeOnTap
 import com.ringlearn.app.ui.ime.rememberRingLearnImeState
+import com.ringlearn.app.ui.LocalActiveRoute
+import com.ringlearn.app.ui.components.SakuTopBar
+import com.ringlearn.app.ui.navigation.AiKey
 import com.ringlearn.app.ui.rememberHapticManager
+import com.ringlearn.app.ui.theme.FredokaBold
 import com.ringlearn.app.util.HapticManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -149,8 +165,9 @@ private fun rememberEntrance(): Animatable<Float, AnimationVector1D> {
 
 /** 流式「正在思考…」三点跳动指示：绘制期读取动画值，无逐帧重组。 */
 @Composable
-private fun TypingIndicator() {
+private fun TypingIndicator(palette: SakuPalette) {
     val transition = rememberInfiniteTransition(label = "typingIndicator")
+    val dotColors = listOf(palette.cyan, palette.yellow, palette.pink)
     Row(verticalAlignment = Alignment.CenterVertically) {
         repeat(3) { index ->
             val offset = transition.animateFloat(
@@ -166,16 +183,16 @@ private fun TypingIndicator() {
             Box(
                 modifier = Modifier
                     .padding(horizontal = 2.dp)
-                    .size(6.dp)
+                    .size(7.dp)
                     .graphicsLayer { translationY = -offset.value }
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    .background(dotColors[index], CircleShape)
             )
         }
         Spacer(Modifier.width(8.dp))
         Text(
             text = "正在思考…",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = palette.inkSecondary
         )
     }
 }
@@ -199,6 +216,7 @@ fun AiChatScreen(
     var menuExpanded by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val hasMoreOlder by viewModel.hasMoreOlder.collectAsStateWithLifecycle()
+    val palette = sakuChatPalette()
 
     val textFieldState = remember { TextFieldState() }
     var keyboardVisible by rememberSaveable { mutableStateOf(false) }
@@ -254,150 +272,178 @@ fun AiChatScreen(
     }
 
     CompositionLocalProvider(LocalChatFontScale provides config.chatFontScale) {
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets(0),
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("AI 对话") },
-                actions = {
-                    ContextBadge(
-                        viewModel = viewModel,
-                        onClick = {
-                            haptic.tick()
-                            showContextInfo = !showContextInfo
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                contentWindowInsets = WindowInsets(0),
+                containerColor = palette.bg,
+                topBar = {
+                    SakuTopBar(
+                        containerColor = palette.topBarBg,
+                        titleAlignStart = true,
+                        title = {
+                            Text(
+                                text = remember {
+                                    buildAnnotatedString {
+                                        withStyle(
+                                            SpanStyle(
+                                                fontFamily = FredokaBold,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        ) { append("AI") }
+                                        append(" 对话")
+                                    }
+                                },
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                                color = palette.ink
+                            )
+                        },
+                        actions = {
+                            ContextBadge(
+                                viewModel = viewModel,
+                                palette = palette,
+                                onClick = {
+                                    haptic.tick()
+                                    showContextInfo = !showContextInfo
+                                }
+                            )
+                            Box {
+                                IconButton(onClick = {
+                                    haptic.click()
+                                    menuExpanded = true
+                                }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_more_vert),
+                                        contentDescription = "更多",
+                                        tint = palette.ink
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = menuExpanded,
+                                    onDismissRequest = { menuExpanded = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("AI 设置") },
+                                        leadingIcon = {
+                                            Icon(painterResource(R.drawable.ic_settings), contentDescription = null)
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            haptic.click()
+                                            showSettings = true
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("重置会话") },
+                                        leadingIcon = {
+                                            Icon(painterResource(R.drawable.ic_delete), contentDescription = null)
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            haptic.click()
+                                            showResetConfirm = true
+                                        }
+                                    )
+                                }
+                            }
                         }
                     )
-                    Box {
-                        IconButton(onClick = {
-                            haptic.click()
-                            menuExpanded = true
-                        }) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_more_vert),
-                                contentDescription = "更多"
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("AI 设置") },
-                                leadingIcon = {
-                                    Icon(painterResource(R.drawable.ic_settings), contentDescription = null)
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    haptic.click()
-                                    showSettings = true
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("重置会话") },
-                                leadingIcon = {
-                                    Icon(painterResource(R.drawable.ic_delete), contentDescription = null)
-                                },
-                                onClick = {
-                                    menuExpanded = false
-                                    haptic.click()
-                                    showResetConfirm = true
-                                }
-                            )
-                        }
-                    }
-                }
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { padding ->
-        val ime = rememberRingLearnImeState(
-            state = textFieldState,
-            onSwitchToSystemIme = viewModel::switchToSystemIme,
-            onCompositionChange = { _, _ -> },
-            onCommit = sendCurrent
-        )
-        val inAppImeController = LocalInAppImeController.current
-        val imeActive = useInAppKeyboard && keyboardVisible
-        InAppImeBinding(
-            controller = inAppImeController,
-            ime = ime,
-            candidates = emptyList(),
-            active = imeActive,
-            onCollapse = collapseKeyboard
-        )
-        val contentOverflowDp = inAppImeController.contentOverflowDp()
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                // imePadding 仅系统输入法模式启用：内置键盘模式系统 IME 不连接（blockingInterceptor 拦截），
-                // 抬升由 contentOverflowDp 实测负责；部分设备聚焦时 IME insets 误报非零，
-                // imePadding 会产生幻影底部 padding，导致收起键盘后键盘区域留白。
-                .then(if (useInAppKeyboard) Modifier else Modifier.imePadding())
-        ) {
-            if (showContextInfo) {
-                ContextInfoBanner(viewModel = viewModel, onClose = { showContextInfo = false })
-            }
-            AiMessagesArea(
-                viewModel = viewModel,
-                messages = messages,
-                hasMoreOlder = hasMoreOlder,
-                listState = listState,
-                haptic = haptic,
-                scope = scope,
-                keyboardVisible = keyboardVisible,
-                onDismissKeyboard = collapseKeyboard,
-                onShowSettings = { showSettings = true }
-            )
-            // 输入区：内部订阅 sending / 文本非空，发送/停止切换与键入只重组输入行
-            AiInputBar(
-                viewModel = viewModel,
-                ime = ime,
-                textFieldState = textFieldState,
-                haptic = haptic,
-                useInAppKeyboard = useInAppKeyboard,
-                keyboardVisible = keyboardVisible,
-                onShowKeyboard = {
-                    haptic.click()
-                    keyboardVisible = true
                 },
-                onSend = sendCurrent,
-                bottomPadding = if (imeActive) contentOverflowDp + 6.dp else 8.dp
-            )
-        }
-    }
-    }
+                snackbarHost = { SnackbarHost(snackbarHostState) }
+            ) { padding ->
+                val ime = rememberRingLearnImeState(
+                    state = textFieldState,
+                    onSwitchToSystemIme = viewModel::switchToSystemIme,
+                    onCompositionChange = { _, _ -> },
+                    onCommit = sendCurrent
+                )
+                val inAppImeController = LocalInAppImeController.current
+                val imeActive = useInAppKeyboard && keyboardVisible
+                InAppImeBinding(
+                    controller = inAppImeController,
+                    ime = ime,
+                    candidates = emptyList(),
+                    active = imeActive,
+                    onCollapse = collapseKeyboard
+                )
+                val contentOverflowDp = inAppImeController.contentOverflowDp()
 
-    if (showSettings) {
-        AiSettingsDialog(
-            config = config,
-            onTest = viewModel::testConnection,
-            onDismiss = { showSettings = false },
-            onSave = { baseUrl, apiKey, model, maxTokens, systemPrompt, thinkingEnabled, chatFontScale ->
-                haptic.click()
-                viewModel.updateConfig(baseUrl, apiKey, model, maxTokens, systemPrompt, thinkingEnabled, chatFontScale)
-                showSettings = false
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(palette.bg)
+                        .padding(padding)
+                        // imePadding 仅系统输入法模式启用：内置键盘模式系统 IME 不连接（blockingInterceptor 拦截），
+                        // 抬升由 contentOverflowDp 实测负责；部分设备聚焦时 IME insets 误报非零，
+                        // imePadding 会产生幻影底部 padding，导致收起键盘后键盘区域留白。
+                        .then(if (useInAppKeyboard) Modifier else Modifier.imePadding())
+                ) {
+                    if (showContextInfo) {
+                        ContextInfoBanner(
+                            viewModel = viewModel,
+                            palette = palette,
+                            onClose = { showContextInfo = false }
+                        )
+                    }
+                    AiMessagesArea(
+                        viewModel = viewModel,
+                        messages = messages,
+                        hasMoreOlder = hasMoreOlder,
+                        listState = listState,
+                        haptic = haptic,
+                        scope = scope,
+                        keyboardVisible = keyboardVisible,
+                        palette = palette,
+                        onDismissKeyboard = collapseKeyboard,
+                        onShowSettings = { showSettings = true }
+                    )
+                    // 输入区：内部订阅 sending / 文本非空，发送/停止切换与键入只重组输入行
+                    AiInputBar(
+                        viewModel = viewModel,
+                        ime = ime,
+                        textFieldState = textFieldState,
+                        haptic = haptic,
+                        useInAppKeyboard = useInAppKeyboard,
+                        keyboardVisible = keyboardVisible,
+                        palette = palette,
+                        onShowKeyboard = {
+                            haptic.click()
+                            keyboardVisible = true
+                        },
+                        onSend = sendCurrent,
+                        bottomPadding = if (imeActive) contentOverflowDp + 6.dp else 8.dp
+                    )
+                }
             }
-        )
-    }
-    if (showResetConfirm) {
-        AlertDialog(
-            onDismissRequest = { showResetConfirm = false },
-            title = { Text("重置会话？") },
-            text = { Text("将清空当前对话记录。历史数据会保留在本机（按会话隔离），此操作不可撤销。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    haptic.click()
-                    viewModel.resetSession()
-                    showResetConfirm = false
-                }) { Text("重置") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetConfirm = false }) { Text("取消") }
+
+            if (showSettings) {
+                AiSettingsDialog(
+                    config = config,
+                    onTest = viewModel::testConnection,
+                    onDismiss = { showSettings = false },
+                    onSave = { baseUrl, apiKey, model, maxTokens, systemPrompt, thinkingEnabled, chatFontScale ->
+                        haptic.click()
+                        viewModel.updateConfig(baseUrl, apiKey, model, maxTokens, systemPrompt, thinkingEnabled, chatFontScale)
+                        showSettings = false
+                    }
+                )
             }
-        )
+            if (showResetConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showResetConfirm = false },
+                    title = { Text("重置会话？") },
+                    text = { Text("将清空当前对话记录。历史数据会保留在本机（按会话隔离），此操作不可撤销。") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            haptic.click()
+                            viewModel.resetSession()
+                            showResetConfirm = false
+                        }) { Text("重置") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showResetConfirm = false }) { Text("取消") }
+                    }
+                )
+            }
     }
 }
 
@@ -411,6 +457,7 @@ private fun ColumnScope.AiMessagesArea(
     haptic: HapticManager,
     scope: CoroutineScope,
     keyboardVisible: Boolean,
+    palette: SakuPalette,
     onDismissKeyboard: () -> Unit,
     onShowSettings: () -> Unit
 ) {
@@ -420,9 +467,42 @@ private fun ColumnScope.AiMessagesArea(
             .weight(1f)
             .fillMaxWidth()
             .dismissInAppImeOnTap(enabled = keyboardVisible, onDismiss = onDismissKeyboard)
+            .drawBehind {
+                // 参考站平涂底色上的静态光斑与散点（一次性绘制，不逐帧）
+                drawCircle(
+                    color = palette.blobCyan,
+                    radius = size.width * 0.58f,
+                    center = Offset(size.width * 0.08f, size.height * 0.14f)
+                )
+                drawCircle(
+                    color = palette.blobYellow,
+                    radius = size.width * 0.42f,
+                    center = Offset(size.width * 0.94f, size.height * 0.52f)
+                )
+                drawCircle(
+                    color = palette.blobPink,
+                    radius = size.width * 0.32f,
+                    center = Offset(size.width * 0.16f, size.height * 0.92f)
+                )
+                drawCircle(
+                    color = palette.yellow,
+                    radius = 4.dp.toPx(),
+                    center = Offset(size.width * 0.86f, size.height * 0.08f)
+                )
+                drawCircle(
+                    color = palette.cyan,
+                    radius = 3.dp.toPx(),
+                    center = Offset(size.width * 0.06f, size.height * 0.42f)
+                )
+                drawCircle(
+                    color = palette.pink,
+                    radius = 3.dp.toPx(),
+                    center = Offset(size.width * 0.8f, size.height * 0.88f)
+                )
+            }
     ) {
         if (messages.isEmpty() && !sending) {
-            AiWelcomeEmpty(onOpenSettings = onShowSettings)
+            AiWelcomeEmpty(onOpenSettings = onShowSettings, palette = palette)
         } else {
             LazyColumn(
                 state = listState,
@@ -459,11 +539,18 @@ private fun ColumnScope.AiMessagesArea(
                                         .padding(top = 10.dp, bottom = 4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Box(
+                                        Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(palette.timeChipBg)
+                                            .padding(horizontal = 10.dp, vertical = 3.dp)
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = palette.inkSecondary
+                                        )
+                                    }
                                 }
                             }
                         if (msg.id == lastId) {
@@ -471,12 +558,14 @@ private fun ColumnScope.AiMessagesArea(
                             StreamingBubble(
                                 viewModel = viewModel,
                                 message = msg,
+                                palette = palette,
                                 onRetry = viewModel::retry
                             )
                         } else {
                             ChatBubble(
                                 message = msg,
                                 liveText = null,
+                                palette = palette,
                                 onRetry = viewModel::retry
                             )
                         }
@@ -491,24 +580,30 @@ private fun ColumnScope.AiMessagesArea(
                 ((info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= lastMessageIndex(hasMoreOlder, messages.size))
         } }
         if (!atBottom) {
-            Surface(
-                onClick = {
-                    haptic.click()
-                    scope.launch { listState.scrollToItem(lastMessageIndex(hasMoreOlder, messages.size)) }
-                },
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 12.dp, bottom = 12.dp)
-                    .size(40.dp)
+                Surface(
+                    onClick = {
+                        haptic.click()
+                        scope.launch { listState.scrollToItem(lastMessageIndex(hasMoreOlder, messages.size)) }
+                    },
+                    shape = CircleShape,
+                    color = palette.fabBg,
+                    border = BorderStroke(1.dp, palette.fieldBorder),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 12.dp, bottom = 12.dp)
+                        .size(40.dp)
+                        .shadow(
+                            elevation = 4.dp,
+                            shape = CircleShape,
+                            ambientColor = palette.glow,
+                            spotColor = palette.glow
+                        )
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = "↓",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = palette.ink
                     )
                 }
             }
@@ -516,71 +611,199 @@ private fun ColumnScope.AiMessagesArea(
     }
 }
 
-/** 空会话欢迎区：圆形图标 + 标题/副标题 + 静态示例提示卡（无交互）。 */
+/** 空会话欢迎区：柔光圆形图标 + 装饰圆点 + 标题/副标题 + 示例提示卡 + 胶囊按钮。 */
 @Composable
-private fun AiWelcomeEmpty(onOpenSettings: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(96.dp)
-                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_ai),
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+private fun AiWelcomeEmpty(onOpenSettings: () -> Unit, palette: SakuPalette) {
+    // 浮动动画仅在 AI Tab 激活时运行：KeepAliveNavHost 常驻组合，切走必须停（架构不变量）。
+    val isAiTabActive = LocalActiveRoute.current.value == AiKey
+    val float = remember { Animatable(0f) }
+    LaunchedEffect(isAiTabActive) {
+        if (isAiTabActive) {
+            while (true) {
+                float.animateTo(1f, tween(durationMillis = 2800, easing = FastOutSlowInEasing))
+                float.animateTo(0f, tween(durationMillis = 2800, easing = FastOutSlowInEasing))
+            }
         }
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = "开始 AI 对话",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
+    }
+    // 整列一次性 fadeInUp（参考站 .animate-fade-in-up），绘制期读取不逐帧重组。
+    val entrance = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        entrance.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 500, easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f))
         )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "发送日语或中文句子，AI 帮你翻译、讲解语法、解析单词。",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+    }
+    val ctaInteraction = remember { MutableInteractionSource() }
+    val ctaPressed by ctaInteraction.collectIsPressedAsState()
+    val density = LocalDensity.current
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 装饰圆点（参考页的青/黄/粉浮动点缀，静态绘制不占逐帧预算）
+        Box(
+            Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 56.dp, top = 72.dp)
+                .size(8.dp)
+                .background(palette.yellow, CircleShape)
         )
-        Spacer(Modifier.height(24.dp))
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(end = 72.dp, top = 120.dp)
+                .size(6.dp)
+                .background(palette.cyan, CircleShape)
+        )
+        Box(
+            Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 88.dp, bottom = 96.dp)
+                .size(6.dp)
+                .background(palette.pink, CircleShape)
+        )
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 64.dp, bottom = 180.dp)
+                .size(8.dp)
+                .background(palette.yellow, CircleShape)
+        )
         Column(
             modifier = Modifier
+                .align(Alignment.Center)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(24.dp)
+                .graphicsLayer {
+                    alpha = entrance.value
+                    translationY = (1f - entrance.value) * with(density) { 24.dp.toPx() }
+                },
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Box(
+                modifier = Modifier
+                    .size(108.dp)
+                    .graphicsLayer { translationY = float.value * with(density) { 8.dp.toPx() } }
+                    .shadow(12.dp, CircleShape, ambientColor = palette.glow, spotColor = palette.glow)
+                    .background(palette.heroCircleBg, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_ai),
+                    contentDescription = null,
+                    modifier = Modifier.size(52.dp),
+                    tint = palette.heroIcon
+                )
+            }
+            Spacer(Modifier.height(24.dp))
             Text(
-                text = "例如：",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary
+                text = "AI ASSISTANT",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = FredokaBold,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp
+                ),
+                color = palette.cyanDeep
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "こんにちは",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                text = remember {
+                    buildAnnotatedString {
+                        append("开始 ")
+                        withStyle(
+                            SpanStyle(
+                                fontFamily = FredokaBold,
+                                fontWeight = FontWeight.Bold
+                            )
+                        ) { append("AI") }
+                        append(" 对话")
+                    }
+                },
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
+                color = palette.ink
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
-                text = "「これは何ですか」是什么意思？",
+                text = "发送日语或中文句子，AI 帮你翻译、讲解语法、解析单词。",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = palette.inkSecondary,
+                textAlign = TextAlign.Center
             )
-        }
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = onOpenSettings) {
-            Text("打开设置")
+            Spacer(Modifier.height(28.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(
+                        3.dp,
+                        RoundedCornerShape(18.dp),
+                        ambientColor = palette.cardShadow,
+                        spotColor = palette.cardShadow
+                    )
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(palette.exampleCardBg)
+                    .border(1.dp, palette.cardBorder, RoundedCornerShape(18.dp))
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    text = "例如",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = palette.cyanDeep
+                )
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(palette.exampleChipBg)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = "こんにちは",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = palette.ink
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(palette.exampleChipBg)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = "「これは何ですか」是什么意思？",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = palette.ink
+                    )
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = onOpenSettings,
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = palette.ctaBg,
+                    contentColor = palette.ctaFg
+                ),
+                interactionSource = ctaInteraction,
+                modifier = Modifier
+                    .height(44.dp)
+                    .graphicsLayer {
+                        val scale = if (ctaPressed) 0.97f else 1f
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .shadow(
+                        4.dp,
+                        RoundedCornerShape(24.dp),
+                        ambientColor = palette.yellowGlow,
+                        spotColor = palette.yellowGlow
+                    )
+            ) {
+                Text(
+                    text = "打开设置",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                )
+            }
         }
     }
 }
@@ -594,11 +817,14 @@ private fun AiInputBar(
     haptic: HapticManager,
     useInAppKeyboard: Boolean,
     keyboardVisible: Boolean,
+    palette: SakuPalette,
     onShowKeyboard: () -> Unit,
     onSend: () -> Unit,
     bottomPadding: Dp
 ) {
     val sending by viewModel.sending.collectAsStateWithLifecycle()
+    val sendInteraction = remember { MutableInteractionSource() }
+    val sendPressed by sendInteraction.collectIsPressedAsState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -615,6 +841,14 @@ private fun AiInputBar(
             onSwitchToInAppKeyboard = viewModel::switchToInAppKeyboard,
             onShowKeyboard = onShowKeyboard,
             maxLines = 4,
+            containerColor = palette.fieldBg,
+            containerShape = RoundedCornerShape(24.dp),
+            containerBorder = BorderStroke(1.dp, palette.fieldBorder),
+            glowColor = palette.glow,
+            glowElevation = 5.dp,
+            accentColor = palette.cyanDeep,
+            textColor = palette.ink,
+            placeholderColor = palette.inkSecondary,
             trailingIcon = {
                 if (textFieldState.text.isNotEmpty()) {
                     IconButton(onClick = {
@@ -624,7 +858,7 @@ private fun AiInputBar(
                         Icon(
                             painter = painterResource(R.drawable.ic_close),
                             contentDescription = "清空",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = palette.inkSecondary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -640,17 +874,21 @@ private fun AiInputBar(
             label = "sendStopSwitch"
         ) { isSending ->
             if (isSending) {
-                IconButton(
+                FilledIconButton(
                     onClick = {
                         haptic.click()
                         viewModel.stop()
                     },
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = palette.stopBg,
+                        contentColor = palette.stopIcon
+                    ),
                     modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_close),
                         contentDescription = "停止生成",
-                        tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -659,7 +897,26 @@ private fun AiInputBar(
                     onClick = onSend,
                     enabled = textFieldState.text.isNotEmpty(),
                     shape = CircleShape,
-                    modifier = Modifier.size(44.dp)
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = palette.sendBg,
+                        contentColor = palette.sendIcon,
+                        disabledContainerColor = palette.cyanSoft,
+                        disabledContentColor = palette.inkSecondary
+                    ),
+                    interactionSource = sendInteraction,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .graphicsLayer {
+                            val scale = if (sendPressed) 0.97f else 1f
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                        .shadow(
+                            4.dp,
+                            CircleShape,
+                            ambientColor = palette.glow,
+                            spotColor = palette.glow
+                        )
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_send),
@@ -699,14 +956,15 @@ private fun LoadMoreItem() {
 @Composable
 private fun ContextBadge(
     viewModel: AiChatViewModel,
+    palette: SakuPalette,
     onClick: () -> Unit
 ) {
     val stats by viewModel.contextStats.collectAsStateWithLifecycle()
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        color = palette.badgeBg,
+        contentColor = palette.badgeFg,
         modifier = Modifier.padding(end = 4.dp)
     ) {
         Row(
@@ -731,12 +989,13 @@ private fun ContextBadge(
 @Composable
 private fun ContextInfoBanner(
     viewModel: AiChatViewModel,
+    palette: SakuPalette,
     onClose: () -> Unit
 ) {
     val stats by viewModel.contextStats.collectAsStateWithLifecycle()
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh
+        color = palette.bannerBg
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -746,19 +1005,20 @@ private fun ContextInfoBanner(
                 painter = painterResource(R.drawable.ic_context),
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = palette.cyanDeep
             )
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = "上下文统计：${formatContextStats(stats)}",
-                    style = MaterialTheme.typography.labelLarge
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = palette.ink
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = "完整上下文已发送：system 提示词固定于首条，历史消息全部随请求携带（不压缩）。",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = palette.inkSecondary
                 )
             }
             IconButton(onClick = onClose) {
@@ -777,12 +1037,14 @@ private fun ContextInfoBanner(
 private fun StreamingBubble(
     viewModel: AiChatViewModel,
     message: AiChatEntity,
+    palette: SakuPalette,
     onRetry: () -> Unit
 ) {
     val liveText by viewModel.streamingText.collectAsStateWithLifecycle()
     ChatBubble(
         message = message,
         liveText = liveText,
+        palette = palette,
         onRetry = onRetry
     )
 }
@@ -791,24 +1053,25 @@ private fun StreamingBubble(
 private fun ChatBubble(
     message: AiChatEntity,
     liveText: String?,
+    palette: SakuPalette,
     onRetry: () -> Unit
 ) {
     val isUser = message.role == "user"
     val isError = message.isError && liveText == null
     val container = when {
         isError -> MaterialTheme.colorScheme.errorContainer
-        isUser -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
+        isUser -> palette.userBubble
+        else -> palette.assistantBubble
     }
     val contentColor = when {
         isError -> MaterialTheme.colorScheme.onErrorContainer
-        isUser -> MaterialTheme.colorScheme.onPrimaryContainer
-        else -> MaterialTheme.colorScheme.onSurface
+        isUser -> palette.userText
+        else -> palette.ink
     }
     val bubbleShape = if (isUser) {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 4.dp, bottomStart = 16.dp)
+        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 4.dp, bottomStart = 18.dp)
     } else {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
+        RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 4.dp)
     }
     Row(
         modifier = Modifier
@@ -823,17 +1086,21 @@ private fun ChatBubble(
                 modifier = Modifier
                     .padding(top = 2.dp, end = 8.dp)
                     .size(30.dp)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+                    .background(
+                        if (isError) MaterialTheme.colorScheme.error else palette.avatarBg,
+                        CircleShape
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "AI",
                     style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FredokaBold,
                     fontWeight = FontWeight.Bold,
                     color = if (isError) {
-                        MaterialTheme.colorScheme.error
+                        MaterialTheme.colorScheme.onError
                     } else {
-                        MaterialTheme.colorScheme.primary
+                        palette.avatarText
                     }
                 )
             }
@@ -841,11 +1108,23 @@ private fun ChatBubble(
         Column(
             modifier = Modifier
                 .fillMaxWidth(if (isUser) 0.78f else 0.88f)
+                .then(
+                    if (!isError && (isUser || liveText == null)) {
+                        Modifier.shadow(
+                            elevation = if (isUser) 2.dp else 4.dp,
+                            shape = bubbleShape,
+                            ambientColor = palette.cardShadow,
+                            spotColor = palette.cardShadow
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
                 .clip(bubbleShape)
                 .background(container)
                 .then(
                     if (!isUser && !isError) {
-                        Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, bubbleShape)
+                        Modifier.border(1.dp, palette.cardBorder, bubbleShape)
                     } else {
                         Modifier
                     }
@@ -861,7 +1140,7 @@ private fun ChatBubble(
             val text = if (truncated) fullText.take(MAX_DISPLAY_CHARS) + "…" else fullText
             when {
                 liveText != null && liveText.isEmpty() -> {
-                    TypingIndicator()
+                    TypingIndicator(palette)
                 }
                 isUser -> Text(
                     text = text,
@@ -875,24 +1154,28 @@ private fun ChatBubble(
                     InlineMarkdownText(
                         text = text,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = contentColor
+                        color = contentColor,
+                        codeBackground = palette.codeBg,
+                        codeColor = palette.codeFg
                     )
                 } else {
                     MarkdownText(
                         text = text,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = contentColor
+                        color = contentColor,
+                        codeBackground = palette.codeBg,
+                        codeColor = palette.codeFg
                     )
                 }
             }
             if (truncated) {
                 TextButton(onClick = { expanded = true }, modifier = Modifier.padding(top = 2.dp)) {
-                    Text("展开全文")
+                    Text("展开全文", color = palette.cyanDeep)
                 }
             }
             if (isError) {
                 TextButton(onClick = onRetry, modifier = Modifier.padding(top = 4.dp)) {
-                    Text("重试")
+                    Text("重试", color = MaterialTheme.colorScheme.error)
                 }
             }
         }

@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +39,7 @@ import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
 import com.ringlearn.app.ui.components.EmptyState
 import com.ringlearn.app.ui.components.LoadingState
+import com.ringlearn.app.ui.components.SakuTopBar
 import com.ringlearn.app.ui.LocalActiveRoute
 import com.ringlearn.app.ui.navigation.StudyKey
 import com.ringlearn.app.ui.rememberHapticManager
@@ -53,7 +52,6 @@ import kotlin.math.roundToInt
 /**
  * 单词学习页：3D 翻转卡片 + 滑动手势 + TTS 发音 + 本轮统计弹窗。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudyScreen(
     onExit: () -> Unit,
@@ -88,7 +86,7 @@ fun StudyScreen(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            CenterAlignedTopAppBar(
+            SakuTopBar(
                 title = { Text("开始背词") },
                 navigationIcon = {
                     IconButton(onClick = onExit) {

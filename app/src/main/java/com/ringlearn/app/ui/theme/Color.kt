@@ -2,52 +2,31 @@ package com.ringlearn.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ---- 品牌色 ----
-/** 主色：天蓝 Sky 500 */
-val Sky500 = Color(0xFF0EA5E9)
-val Sky600 = Color(0xFF0284C7)
-val Sky700 = Color(0xFF0369A1)
-val Sky300 = Color(0xFF7DD3FC)
-val Sky200 = Color(0xFFBAE6FD)
-val Sky900 = Color(0xFF0C4A6E)
-
-/** 辅助色：青绿 Teal 500 */
-val Teal500 = Color(0xFF14B8A6)
-val Teal600 = Color(0xFF0D9488)
-val Teal700 = Color(0xFF0F766E)
-val Teal300 = Color(0xFF5EEAD4)
-val Teal200 = Color(0xFF99F6E4)
-val Teal900 = Color(0xFF134E4A)
-
-/** 三级色：靛蓝（用于测验/生词本等强调场景） */
-val Indigo500 = Color(0xFF6366F1)
-val Indigo700 = Color(0xFF4338CA)
-val Indigo300 = Color(0xFFA5B4FC)
-val Indigo200 = Color(0xFFC7D2FE)
-val Indigo900 = Color(0xFF312E81)
-
-// ---- 中性色（Slate）----
-val Slate50 = Color(0xFFF8FAFC)
-val Slate100 = Color(0xFFF1F5F9)
-val Slate200 = Color(0xFFE2E8F0)
-val Slate300 = Color(0xFFCBD5E1)
-val Slate400 = Color(0xFF94A3B8)
-val Slate500 = Color(0xFF64748B)
-val Slate600 = Color(0xFF475569)
-val Slate700 = Color(0xFF334155)
-val Slate800 = Color(0xFF1E293B)
-val Slate900 = Color(0xFF0F172A)
-val Slate950 = Color(0xFF020617)
-
-// ---- 语义色 ----
-val Red600 = Color(0xFFDC2626)
-val Red300 = Color(0xFFF87171)
-val Red200 = Color(0xFFFECACA)
-val Red800 = Color(0xFF991B1B)
-val Red900 = Color(0xFF7F1D1D)
-
-val Green500 = Color(0xFF22C55E)
-val Amber500 = Color(0xFFF59E0B)
+// ---- Saku 品牌色（参考 saku 设计规范）----
+/** 品牌青（浅）：参考站 --primary #7DD3E8 */
+val SakuCyan = Color(0xFF7DD3E8)
+/** 品牌青（深）：按钮/强调 #5BC4E0 */
+val SakuCyanDeep = Color(0xFF5BC4E0)
+/** 品牌青浅底：primaryContainer / 徽章底 */
+val SakuCyanSoft = Color(0xFFE8F7FC)
+/** 暖黄点缀：CTA / 停止键 #F9D85A */
+val SakuYellow = Color(0xFFF9D85A)
+/** 暖黄浅底 */
+val SakuYellowSoft = Color(0xFFFFF9E6)
+/** 粉点缀 */
+val SakuPink = Color(0xFFFFB7C5)
+/** 深墨蓝文字：参考站 foreground #2C4A5A */
+val SakuInk = Color(0xFF2C4A5A)
+/** 深墨蓝次文字（约 70%） */
+val SakuInkSecondary = Color(0xB32C4A5A)
+/** 页面平涂底色 */
+val SakuBg = Color(0xFFEEF8FC)
+/** 卡片墨色 12% 描边 */
+val SakuCardBorder = Color(0x1F2C4A5A)
+/** 交互元素青色柔光 */
+val SakuCyanGlow = Color(0x3D79D4E4)
+/** 黄色按钮光晕 */
+val SakuYellowGlow = Color(0x59FED25F)
 
 // ---- 卡片手势语义色 ----
 /** 右滑“认识” */

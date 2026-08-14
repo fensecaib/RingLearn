@@ -1,5 +1,7 @@
 package com.ringlearn.app.ui.wordbook
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
@@ -17,9 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +46,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
 import com.ringlearn.app.ui.components.EmptyState
+import com.ringlearn.app.ui.components.SakuTopBar
+import com.ringlearn.app.ui.components.sakuCardBorder
+import com.ringlearn.app.ui.components.sakuCardColors
 import com.ringlearn.app.ui.ime.InAppImeBinding
 import com.ringlearn.app.ui.ime.LocalInAppImeController
 import com.ringlearn.app.ui.ime.contentOverflowDp
@@ -58,7 +60,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /** 生词本：搜索（内置罗马音键盘/系统输入法）+ 列表 + 移除 */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WordBookScreen(
     viewModel: WordBookViewModel = hiltViewModel()
@@ -106,7 +107,7 @@ fun WordBookScreen(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            CenterAlignedTopAppBar(title = { Text("生词本") })
+            SakuTopBar(title = { Text("生词本") })
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
@@ -142,6 +143,12 @@ fun WordBookScreen(
                 onSwitchToInAppKeyboard = viewModel::onSwitchToInAppKeyboard,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 placeholder = "搜索单词 / 假名 / 释义",
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                containerShape = RoundedCornerShape(24.dp),
+                containerBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+                accentColor = MaterialTheme.colorScheme.primary,
+                textColor = MaterialTheme.colorScheme.onSurface,
+                placeholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 keyboardVisible = keyboardVisible,
                 onShowKeyboard = {
                     haptic.click()
@@ -235,9 +242,8 @@ private fun FavoriteWordItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        colors = sakuCardColors(),
+        border = sakuCardBorder()
     ) {
         Row(
             modifier = Modifier

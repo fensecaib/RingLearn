@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -140,7 +142,9 @@ fun RingLearnApp() {
                     // 底栏常驻：仅在系统输入法模式下系统键盘可见时隐藏（被系统键盘盖住）；
                     // 内置键盘场景从不移除底栏（由覆盖层盖住）
                     if (!hideDock) {
-                        NavigationBar() {
+                        NavigationBar(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                        ) {
                             bottomDestinations.forEach { destination ->
                                 key(destination.key) {
                                     // 每个 item 独立作用域读路由：切 Tab 只重组受影响的 item
@@ -149,6 +153,13 @@ fun RingLearnApp() {
                                     NavigationBarItem(
                                         selected = selected,
                                         onClick = { navigator.navigate(destination.key) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            indicatorColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        ),
                                         icon = {
                                             Icon(
                                                 painter = painterResource(destination.iconRes),

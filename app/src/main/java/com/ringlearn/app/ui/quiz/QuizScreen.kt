@@ -19,8 +19,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -47,12 +45,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ringlearn.app.R
 import com.ringlearn.app.ui.components.EmptyState
 import com.ringlearn.app.ui.components.LoadingState
+import com.ringlearn.app.ui.components.SakuTopBar
+import com.ringlearn.app.ui.components.sakuCardBorder
+import com.ringlearn.app.ui.components.sakuCtaButtonColors
 import com.ringlearn.app.ui.rememberHapticManager
 import com.ringlearn.app.ui.rememberTtsManager
 import com.ringlearn.app.util.TtsManager
 
 /** 随机测验：看日文选中文释义（四选一） */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuizScreen(
     onExit: () -> Unit,
@@ -75,7 +75,7 @@ fun QuizScreen(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            CenterAlignedTopAppBar(
+            SakuTopBar(
                 title = { Text("随机测验") },
                 navigationIcon = {
                     IconButton(onClick = onExit) {
@@ -178,7 +178,8 @@ private fun QuizQuestionView(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
+            ),
+            border = sakuCardBorder()
         ) {
             Column(
                 modifier = Modifier
@@ -241,6 +242,7 @@ private fun QuizQuestionView(
         if (selected != null) {
             Button(
                 onClick = { haptic.click(); onNext() },
+                colors = sakuCtaButtonColors(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -331,6 +333,7 @@ private fun QuizResult(
         Spacer(Modifier.height(32.dp))
         Button(
             onClick = { haptic.click(); onRestart() },
+            colors = sakuCtaButtonColors(),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)

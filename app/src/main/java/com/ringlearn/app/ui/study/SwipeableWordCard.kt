@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
+import com.ringlearn.app.ui.components.sakuCardColors
 import com.ringlearn.app.ui.theme.BookmarkAmber
 import com.ringlearn.app.ui.theme.BookmarkAmberDark
 import com.ringlearn.app.ui.theme.KnowGreen
@@ -245,9 +246,7 @@ fun SwipeableWordCard(
                     rotationZ = dragFraction * MAX_TILT_DEGREES
                 },
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            ),
+            colors = sakuCardColors(),
             // 弱机上去掉阴影（渲染昂贵），用细边框保持视觉层次
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)

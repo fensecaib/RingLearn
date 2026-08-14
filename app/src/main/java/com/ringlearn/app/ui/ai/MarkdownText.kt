@@ -121,20 +121,20 @@ fun MarkdownText(
     text: String,
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.bodyMedium,
-    color: Color = MaterialTheme.colorScheme.onSurface
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    codeBackground: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    codeColor: Color = MaterialTheme.colorScheme.primary
 ) {
     val fontScale = LocalChatFontScale.current
     val blocks = remember(text) { parseMarkdown(text) }
     val scaledBody = style.copy(fontSize = style.fontSize * fontScale)
-    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
-    val primary = MaterialTheme.colorScheme.primary
-    val (bold, code, italic) = remember(style, color, surfaceContainerHigh, primary, fontScale) {
+    val (bold, code, italic) = remember(style, color, codeBackground, codeColor, fontScale) {
         Triple(
             scaledBody.toSpanStyle().copy(fontWeight = FontWeight.Bold),
             scaledBody.toSpanStyle().copy(
                 fontFamily = FontFamily.Monospace,
-                background = surfaceContainerHigh,
-                color = primary
+                background = codeBackground,
+                color = codeColor
             ),
             scaledBody.toSpanStyle().copy(fontStyle = FontStyle.Italic)
         )
@@ -197,13 +197,13 @@ fun MarkdownText(
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = MaterialTheme.typography.bodySmall.fontSize * fontScale,
                             fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = codeColor
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .background(codeBackground)
                             .padding(10.dp)
                     )
                 }
@@ -232,19 +232,19 @@ fun InlineMarkdownText(
     text: String,
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.bodyMedium,
-    color: Color = MaterialTheme.colorScheme.onSurface
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    codeBackground: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    codeColor: Color = MaterialTheme.colorScheme.primary
 ) {
     val fontScale = LocalChatFontScale.current
     val scaledBody = style.copy(fontSize = style.fontSize * fontScale)
-    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
-    val primary = MaterialTheme.colorScheme.primary
-    val (bold, code, italic) = remember(style, color, surfaceContainerHigh, primary, fontScale) {
+    val (bold, code, italic) = remember(style, color, codeBackground, codeColor, fontScale) {
         Triple(
             scaledBody.toSpanStyle().copy(fontWeight = FontWeight.Bold),
             scaledBody.toSpanStyle().copy(
                 fontFamily = FontFamily.Monospace,
-                background = surfaceContainerHigh,
-                color = primary
+                background = codeBackground,
+                color = codeColor
             ),
             scaledBody.toSpanStyle().copy(fontStyle = FontStyle.Italic)
         )

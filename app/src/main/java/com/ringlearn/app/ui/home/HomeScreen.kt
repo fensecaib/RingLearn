@@ -26,7 +26,6 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -68,8 +67,12 @@ import com.ringlearn.app.ui.LocalActiveRoute
 import com.ringlearn.app.ui.components.EmptyState
 import com.ringlearn.app.ui.components.FlameIcon
 import com.ringlearn.app.ui.components.LoadingState
+import com.ringlearn.app.ui.components.SakuTopBar
+import com.ringlearn.app.ui.components.sakuCardBorder
+import com.ringlearn.app.ui.components.sakuCardColors
 import com.ringlearn.app.ui.navigation.HomeKey
 import com.ringlearn.app.ui.rememberHapticManager
+import com.ringlearn.app.ui.theme.FredokaBold
 import com.ringlearn.app.util.HapticManager
 import kotlin.math.roundToInt
 
@@ -113,11 +116,15 @@ fun HomeScreen(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            CenterAlignedTopAppBar(
+            SakuTopBar(
+                containerColor = MaterialTheme.colorScheme.background,
                 title = {
                     Text(
                         text = "RingLearn",
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontFamily = FredokaBold,
+                            fontWeight = FontWeight.Bold
+                        ),
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -314,7 +321,11 @@ private fun HomeContent(
 @Composable
 private fun ProgressSection(learnedToday: Int, goal: Int) {
     val progress = if (goal > 0) (learnedToday.toFloat() / goal).coerceIn(0f, 1f) else 0f
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = sakuCardColors(),
+        border = sakuCardBorder()
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -360,7 +371,8 @@ private fun StreakCard(streakDays: Int, modifier: Modifier = Modifier) {
         modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.tertiaryContainer
-        )
+        ),
+        border = sakuCardBorder()
     ) {
         Row(
             modifier = Modifier
@@ -395,7 +407,8 @@ private fun DueBadgeCard(dueCount: Int, modifier: Modifier = Modifier) {
         modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
+        ),
+        border = sakuCardBorder()
     ) {
         Row(
             modifier = Modifier
@@ -446,7 +459,8 @@ private fun QuickActionsRow(
             icon = R.drawable.ic_play,
             label = "开始背词",
             modifier = Modifier.weight(1f),
-            onClick = onStartStudy
+            onClick = onStartStudy,
+            accent = true
         )
         QuickActionCard(
             icon = R.drawable.ic_wordbook,
@@ -475,14 +489,29 @@ private fun QuickActionCard(
     icon: Int,
     label: String,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    accent: Boolean = false
 ) {
+    val container = if (accent) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLowest
+    }
+    val content = if (accent) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    val iconTint = if (accent) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
     Card(
         onClick = onClick,
         modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        colors = CardDefaults.cardColors(containerColor = container),
+        border = sakuCardBorder()
     ) {
         Column(
             modifier = Modifier
@@ -493,14 +522,14 @@ private fun QuickActionCard(
             Icon(
                 painter = painterResource(icon),
                 contentDescription = label,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = iconTint,
                 modifier = Modifier.size(28.dp)
             )
             Spacer(Modifier.height(8.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = content
             )
         }
     }
@@ -508,7 +537,11 @@ private fun QuickActionCard(
 
 @Composable
 private fun GoalCard(goal: Int, onGoalChange: (Float) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = sakuCardColors(),
+        border = sakuCardBorder()
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -554,7 +587,11 @@ private fun SettingsCard(
     onShowTimePicker: () -> Unit
 ) {
     val vibration = settings.vibrationEnabled
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = sakuCardColors(),
+        border = sakuCardBorder()
+    ) {
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             Text(
                 text = "系统设置",

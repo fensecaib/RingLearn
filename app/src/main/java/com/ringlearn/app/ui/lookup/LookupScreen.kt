@@ -1,6 +1,6 @@
 package com.ringlearn.app.ui.lookup
 
-
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -28,8 +28,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -71,6 +69,9 @@ import androidx.compose.foundation.text.input.TextFieldState
 import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
 import com.ringlearn.app.ui.components.EmptyState
+import com.ringlearn.app.ui.components.SakuTopBar
+import com.ringlearn.app.ui.components.sakuCardBorder
+import com.ringlearn.app.ui.components.sakuCardColors
 import com.ringlearn.app.ui.ime.InAppImeBinding
 import com.ringlearn.app.ui.ime.LocalInAppImeController
 import com.ringlearn.app.ui.ime.contentOverflowDp
@@ -114,7 +115,7 @@ fun LookupScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0),
-        topBar = { CenterAlignedTopAppBar(title = { Text("查词") }) }
+        topBar = { SakuTopBar(title = { Text("查词") }) }
     ) { padding ->
         val ime = rememberRingLearnImeState(
             state = textFieldState,
@@ -238,6 +239,12 @@ private fun LookupInputArea(
                 onSwitchToInAppKeyboard = viewModel::onSwitchToInAppKeyboard,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 placeholder = "输入日文或中文释义",
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                containerShape = RoundedCornerShape(24.dp),
+                containerBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+                accentColor = MaterialTheme.colorScheme.primary,
+                textColor = MaterialTheme.colorScheme.onSurface,
+                placeholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 keyboardVisible = keyboardVisible,
                 onShowKeyboard = onShowKeyboard,
                 leadingIcon = {
@@ -490,9 +497,8 @@ private fun WordLookupCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        colors = sakuCardColors(),
+        border = sakuCardBorder()
     ) {
         Row(
             modifier = Modifier
