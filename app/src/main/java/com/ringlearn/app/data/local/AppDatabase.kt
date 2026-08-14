@@ -13,7 +13,7 @@ import com.ringlearn.app.data.local.entity.WordEntity
 
 @Database(
     entities = [WordEntity::class, ReviewLogEntity::class, AiChatEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -34,6 +34,15 @@ abstract class AppDatabase : RoomDatabase() {
                         "`createdAt` INTEGER NOT NULL, " +
                         "`isError` INTEGER NOT NULL)"
                 )
+            }
+        }
+
+        /** v2 → v3：为 IME 假名前缀 / 到期复习 / 新词查询补二级索引（数据不动，id 不变）。 */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_words_kana` ON `words` (`kana`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_words_dueAt` ON `words` (`dueAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_words_reviewCount` ON `words` (`reviewCount`)")
             }
         }
     }

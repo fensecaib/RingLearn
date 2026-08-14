@@ -64,7 +64,8 @@ interface WordDao {
     /** IME 转换候选：按假名前缀匹配，优先完全匹配，再按 JLPT 等级与词库顺序（最多 20 条） */
     @Query(
         "SELECT * FROM words WHERE kana LIKE :kana || '%' ESCAPE '\\' " +
-            "ORDER BY CASE WHEN kana = :kana THEN 0 ELSE 1 END, jlpt ASC, id ASC LIMIT 20"
+            "ORDER BY CASE WHEN kana = :kana THEN 0 ELSE 1 END, " +
+            "CASE jlpt WHEN 'N2' THEN 0 WHEN 'N1' THEN 1 ELSE 2 END, id ASC LIMIT 20"
     )
     suspend fun getCandidatesByKana(kana: String): List<WordEntity>
 
@@ -80,6 +81,14 @@ interface WordDao {
     @Query("SELECT COUNT(*) FROM words")
     suspend fun count(): Int
 
+    /** 词库中全部 (词, 假名) 键，供增量种子去重（仅词库规模，轻量）。 */
+    @Query("SELECT word, kana FROM words")
+    suspend fun getWordKeys(): List<WordKey>
+
+    /** 指定 JLPT 等级的词条数（判断该等级是否已种入）。 */
+    @Query("SELECT COUNT(*) FROM words WHERE jlpt = :level")
+    suspend fun countByJlpt(level: String): Int
+
     /** 重置所有学习进度（保留词条本身） */
     @Query(
         "UPDATE words SET repetitions = 0, easeFactor = 2.5, intervalDays = 0, dueAt = 0, " +
@@ -88,6 +97,9 @@ interface WordDao {
     )
     suspend fun resetAllProgress()
 }
+
+/** (word, kana) 轻量投影，避免增量种子去重时加载整行。 */
+data class WordKey(val word: String, val kana: String)
 
 
 

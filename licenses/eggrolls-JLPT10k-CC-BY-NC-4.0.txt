@@ -1,0 +1,16 @@
+RingLearn 内置 N1 词库（app/src/main/assets/jlpt_n1_words.json，整理源 tools/n1_seed_source.json）
+的内容来自 egg rolls 制作的 JLPT 一万词 Anki 牌组：
+
+    https://github.com/5mdld/anki-jlpt-decks
+
+该牌组遵循 Creative Commons Attribution-NonCommercial 4.0 International
+(CC BY-NC 4.0) 许可：
+
+    https://creativecommons.org/licenses/by-nc/4.0/
+
+使用约定（自述声明，非法律意见）：
+- 署名：保留原作者 egg rolls 与本牌组链接；
+- 非商业：RingLearn 仅作个人学习使用，不进行商业分发；
+- 本项目从牌组中提取了 N1 层级（高频/中频/低频补齐）的「词、假名、简体中文释义、
+  日文例句、简体中文例句译文」字段，格式已转换为 RingLearn 的五元数组；
+- 牌组内容本身来源于公开互联网资源及原作者个人创作，具体权利归属以原作者声明为准。

@@ -96,15 +96,28 @@ class WordRepository @Inject constructor(
         )
     }
 
-    /** 首次启动时把 assets 内置词库写入 Room（幂等）。 */
+    /**
+     * 内置词库种子（幂等）：空库先种 N2；老安装缺 N1 时增量补齐。
+     * 用 (word, kana) 去重后仅插入缺失词条，既有自增 id 与学习进度零扰动。
+     */
     suspend fun ensureSeeded() {
         if (wordDao.count() == 0) {
-            val json = withContext(Dispatchers.IO) {
-                context.assets.open("jlpt_n2_words.json")
-                    .bufferedReader(Charsets.UTF_8).use { it.readText() }
-            }
-            wordDao.insertAll(SeedWordParser.parse(json))
+            seedLevel("jlpt_n2_words.json", "N2")
         }
+        if (wordDao.countByJlpt("N1") == 0) {
+            seedLevel("jlpt_n1_words.json", "N1")
+        }
+    }
+
+    private suspend fun seedLevel(assetName: String, jlptLevel: String) {
+        val json = withContext(Dispatchers.IO) {
+            context.assets.open(assetName)
+                .bufferedReader(Charsets.UTF_8).use { it.readText() }
+        }
+        val words = SeedWordParser.parse(json, jlptLevel = jlptLevel)
+        val existing = wordDao.getWordKeys().mapTo(HashSet()) { it.word to it.kana }
+        val missing = filterNewWords(existing, words)
+        if (missing.isNotEmpty()) wordDao.insertAll(missing)
     }
 
     /** 组装一轮学习队列：优先到期复习，再用新词补齐。 */
@@ -194,6 +207,15 @@ class WordRepository @Inject constructor(
     private companion object {
         const val DAY_MILLIS = 24 * 60 * 60 * 1000L
     }
+}
+
+/** 按 (word, kana) 去重：仅保留词库中不存在的新词条（内部重复一并过滤）。 */
+internal fun filterNewWords(
+    existing: Set<Pair<String, String>>,
+    words: List<WordEntity>
+): List<WordEntity> {
+    val seen = HashSet(existing)
+    return words.filter { seen.add(it.word to it.kana) }
 }
 
 /** 当天零点（epoch millis，本地时区）。 */

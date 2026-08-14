@@ -2,6 +2,7 @@ package com.ringlearn.app.data.local.entity
 
 import androidx.compose.runtime.Stable
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -11,7 +12,14 @@ import androidx.room.PrimaryKey
  */
 // @Stable：纯不可变 data class；显式标注让 List<WordEntity> 参数（候选栏等）静态稳定
 @Stable
-@Entity(tableName = "words")
+@Entity(
+    tableName = "words",
+    indices = [
+        Index("kana"),
+        Index("dueAt"),
+        Index("reviewCount")
+    ]
+)
 data class WordEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     /** 日文表记（含汉字） */
