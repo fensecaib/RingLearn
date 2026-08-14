@@ -57,11 +57,28 @@ class NavigationState(
     var topLevelRoute: NavKey by topLevelRoute
 }
 
-/** 处理导航事件（前进 / 返回），只修改 [NavigationState]。 */
-class Navigator(val state: NavigationState) {
+/**
+ * 处理导航事件（前进 / 返回），只修改 [NavigationState]。
+ *
+ * [leafRoutes] 是不展示在底栏的「叶子」路由（四个工具页 + 设置页）：
+ * 进入叶子前记录来源顶级 Tab，返回时回到来源（来源感知）；
+ * 来源记忆仅存在于进程内，进程重建后叶子页默认回 [defaultLeafParent]。
+ */
+class Navigator(
+    val state: NavigationState,
+    leafRoutes: Set<NavKey>,
+    defaultLeafParent: NavKey
+) {
+    private val leafRouteSet = leafRoutes
+    private var leafReturnRoute: NavKey = defaultLeafParent
+
     fun navigate(route: NavKey) {
         if (route in state.backStacks.keys) {
-            // 顶级 Tab：直接切换
+            // 顶级路由：直接切换；进入叶子前记住来源 Tab
+            val current = state.topLevelRoute
+            if (route in leafRouteSet && route != current && current !in leafRouteSet) {
+                leafReturnRoute = current
+            }
             state.topLevelRoute = route
         } else {
             // 子路由：压入当前栈
@@ -73,10 +90,10 @@ class Navigator(val state: NavigationState) {
         val currentStack = state.backStacks[state.topLevelRoute]
             ?: error("Stack for ${state.topLevelRoute} not found")
         val currentRoute = currentStack.last()
-        if (currentRoute == state.topLevelRoute) {
-            state.topLevelRoute = state.startRoute
-        } else {
-            currentStack.removeLastOrNull()
+        when {
+            currentRoute in leafRouteSet -> state.topLevelRoute = leafReturnRoute
+            currentRoute == state.topLevelRoute -> state.topLevelRoute = state.startRoute
+            else -> currentStack.removeLastOrNull()
         }
     }
 }
@@ -111,4 +128,3 @@ fun NavigationState.toAllEntries(
         stackEntries.firstOrNull()?.let { route to it }
     }
 }
-

@@ -119,7 +119,7 @@ fun StudyScreen(
                     iconRes = R.drawable.ic_check,
                     title = "今日任务已完成",
                     subtitle = "没有待学习的单词了。\n可以先去生词本复习收藏的词条，或做一轮随机测验。",
-                    actionLabel = "返回首页",
+                    actionLabel = "返回",
                     onAction = onExit
                 )
 
@@ -263,7 +263,7 @@ private fun RoundStatsDialog(
             TextButton(onClick = onNextRound) { Text("再来一组") }
         },
         dismissButton = {
-            TextButton(onClick = onExit) { Text("返回首页") }
+            TextButton(onClick = onExit) { Text("返回") }
         }
     )
 }
@@ -295,4 +295,3 @@ private fun formatDuration(seconds: Long): String {
     val s = seconds % 60
     return "%02d:%02d".format(m, s)
 }
-

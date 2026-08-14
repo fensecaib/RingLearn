@@ -1,12 +1,6 @@
 package com.ringlearn.app.ui.home
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.ReportDrawnWhen
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,22 +21,16 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,16 +40,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.core.content.ContextCompat
 import com.ringlearn.app.R
-import com.ringlearn.app.domain.model.AppSettings
-import com.ringlearn.app.domain.model.ThemeMode
 import com.ringlearn.app.ui.components.CircularProgressRing
 import com.ringlearn.app.ui.LocalActiveRoute
 import com.ringlearn.app.ui.components.EmptyState
@@ -78,11 +62,12 @@ import kotlin.math.roundToInt
 
 /**
  * 首页：学习进度环形图、连续学习火焰、待复习角标、
- * 快捷操作、每日目标滑块、系统设置与进度重置。
+ * 快捷操作、每日目标滑块与进度重置；顶栏齿轮进入设置页。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    onNavigateToSettings: () -> Unit,
     onNavigateToStudy: () -> Unit,
     onNavigateToWordBook: () -> Unit,
     onNavigateToQuiz: () -> Unit,
@@ -94,18 +79,6 @@ fun HomeScreen(
     ReportDrawnWhen { uiState.stats.isReady }
     val haptic = rememberHapticManager()
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
-    // Android 13+ 开启学习提醒需要运行时通知权限
-    val notifPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            viewModel.setReminderEnabled(true)
-        } else {
-            viewModel.postMessage("未获得通知权限，学习提醒将无法弹出通知")
-        }
-    }
-    var showTimePicker by rememberSaveable { mutableStateOf(false) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -127,6 +100,15 @@ fun HomeScreen(
                         ),
                         color = MaterialTheme.colorScheme.primary
                     )
+                },
+                actions = {
+                    IconButton(onClick = { haptic.click(); onNavigateToSettings() }) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_settings),
+                            contentDescription = "设置",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             )
         },
@@ -152,40 +134,11 @@ fun HomeScreen(
                     onOpenQuiz = onNavigateToQuiz,
                     onOpenLookup = onNavigateToLookup,
                     onSetDailyGoal = viewModel::setDailyGoal,
-                    onSetThemeMode = viewModel::setThemeMode,
-                    onSetSound = viewModel::setSoundEnabled,
-                    onSetVibration = viewModel::setVibrationEnabled,
-                    onSetAutoSpeak = viewModel::setAutoSpeakEnabled,
-                    onSetReminderEnabled = { enabled ->
-                        if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-                            PackageManager.PERMISSION_GRANTED
-                        ) {
-                            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            viewModel.setReminderEnabled(enabled)
-                        }
-                    },
-                    onSetReminderTime = viewModel::setReminderTime,
                     onResetProgress = viewModel::resetProgress,
-                    onShowTimePicker = { showTimePicker = true },
                     onShowResetDialog = { showResetDialog = true }
                 )
             }
         }
-    }
-
-    if (showTimePicker) {
-        TimePickerDialog(
-            initialHour = uiState.settings.reminderHour,
-            initialMinute = uiState.settings.reminderMinute,
-            onConfirm = { hour, minute ->
-                haptic.tick()
-                viewModel.setReminderTime(hour, minute)
-                showTimePicker = false
-            },
-            onDismiss = { showTimePicker = false }
-        )
     }
 
     if (showResetDialog) {
@@ -227,21 +180,13 @@ private fun HomeContent(
     onOpenQuiz: () -> Unit,
     onOpenLookup: () -> Unit,
     onSetDailyGoal: (Int) -> Unit,
-    onSetThemeMode: (ThemeMode) -> Unit,
-    onSetSound: (Boolean) -> Unit,
-    onSetVibration: (Boolean) -> Unit,
-    onSetAutoSpeak: (Boolean) -> Unit,
-    onSetReminderEnabled: (Boolean) -> Unit,
-    onSetReminderTime: (Int, Int) -> Unit,
     onResetProgress: () -> Unit,
-    onShowTimePicker: () -> Unit,
     onShowResetDialog: () -> Unit
 ) {
     val settings = state.settings
     val stats = state.stats
-    val vibration = settings.vibrationEnabled
 
-    // LazyColumn：首屏只合成可见项，下方设置区滚动到才合成，降低切换进首页的合成成本
+    // LazyColumn：首屏只合成可见项，下方重置入口滚动到才合成，降低切换进首页的合成成本
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -280,19 +225,6 @@ private fun HomeContent(
             GoalCard(
                 goal = settings.dailyGoal,
                 onGoalChange = { onSetDailyGoal(it.roundToInt()) }
-            )
-        }
-
-        item {
-            SettingsCard(
-                settings = settings,
-                haptic = haptic,
-                onSetThemeMode = onSetThemeMode,
-                onSetSound = onSetSound,
-                onSetVibration = onSetVibration,
-                onSetAutoSpeak = onSetAutoSpeak,
-                onSetReminderEnabled = onSetReminderEnabled,
-                onShowTimePicker = onShowTimePicker
             )
         }
 
@@ -573,205 +505,3 @@ private fun GoalCard(goal: Int, onGoalChange: (Float) -> Unit) {
         }
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SettingsCard(
-    settings: AppSettings,
-    haptic: HapticManager,
-    onSetThemeMode: (ThemeMode) -> Unit,
-    onSetSound: (Boolean) -> Unit,
-    onSetVibration: (Boolean) -> Unit,
-    onSetAutoSpeak: (Boolean) -> Unit,
-    onSetReminderEnabled: (Boolean) -> Unit,
-    onShowTimePicker: () -> Unit
-) {
-    val vibration = settings.vibrationEnabled
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = sakuCardColors(),
-        border = sakuCardBorder()
-    ) {
-        Column(modifier = Modifier.padding(vertical = 8.dp)) {
-            Text(
-                text = "系统设置",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-            HorizontalDivider()
-
-            SettingRow(
-                icon = R.drawable.ic_notifications,
-                title = "学习提醒",
-                subtitle = if (settings.reminderEnabled) "每天 ${settings.reminderTimeText}" else "关闭",
-                trailing = {
-                    Switch(
-                        checked = settings.reminderEnabled,
-                        onCheckedChange = {
-                            haptic.tick()
-                            onSetReminderEnabled(it)
-                        }
-                    )
-                },
-                onClick = onShowTimePicker
-            )
-
-            HorizontalDivider()
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_brightness_auto),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.width(16.dp))
-                Text(
-                    text = "主题",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f)
-                )
-                SingleChoiceSegmentedButtonRow {
-                    ThemeMode.entries.forEachIndexed { index, mode ->
-                        SegmentedButton(
-                            selected = settings.themeMode == mode,
-                            onClick = {
-                                haptic.tick()
-                                onSetThemeMode(mode)
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = ThemeMode.entries.size
-                            ),
-                            label = { Text(mode.label()) }
-                        )
-                    }
-                }
-            }
-
-            HorizontalDivider()
-
-            SettingRow(
-                icon = R.drawable.ic_volume,
-                title = "音效",
-                subtitle = "按钮与操作音效",
-                trailing = {
-                    Switch(
-                        checked = settings.soundEnabled,
-                        onCheckedChange = {
-                            haptic.tick()
-                            onSetSound(it)
-                        }
-                    )
-                }
-            )
-
-            HorizontalDivider()
-
-            SettingRow(
-                icon = R.drawable.ic_settings,
-                title = "震动反馈",
-                subtitle = "交互触觉反馈（VibrationEffect）",
-                trailing = {
-                    Switch(
-                        checked = settings.vibrationEnabled,
-                        onCheckedChange = {
-                            haptic.tick()
-                            onSetVibration(it)
-                        }
-                    )
-                }
-            )
-
-            HorizontalDivider()
-
-            SettingRow(
-                icon = R.drawable.ic_volume,
-                title = "自动播放发音",
-                subtitle = "翻到新卡片时自动 TTS 朗读",
-                trailing = {
-                    Switch(
-                        checked = settings.autoSpeakEnabled,
-                        onCheckedChange = {
-                            haptic.tick()
-                            onSetAutoSpeak(it)
-                        }
-                    )
-                }
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingRow(
-    icon: Int,
-    title: String,
-    subtitle: String,
-    trailing: @Composable () -> Unit,
-    onClick: (() -> Unit)? = null
-) {
-    val base = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 8.dp)
-    Row(
-        modifier = if (onClick != null) base.clickable { onClick() } else base,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        trailing()
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TimePickerDialog(
-    initialHour: Int,
-    initialMinute: Int,
-    onConfirm: (Int, Int) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val state = rememberTimePickerState(
-        initialHour = initialHour,
-        initialMinute = initialMinute,
-        is24Hour = true
-    )
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("选择学习提醒时间") },
-        text = { TimePicker(state = state) },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(state.hour, state.minute) }) { Text("确定") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
-    )
-}
-
-private fun ThemeMode.label(): String = when (this) {
-    ThemeMode.SYSTEM -> "跟随系统"
-    ThemeMode.LIGHT -> "浅色"
-    ThemeMode.DARK -> "深色"
-}
-
-

@@ -38,7 +38,9 @@ import com.ringlearn.app.ui.ime.LocalInAppImeController
 import com.ringlearn.app.ui.ai.AiChatScreen
 import com.ringlearn.app.ui.lookup.LookupScreen
 import com.ringlearn.app.ui.quiz.QuizScreen
+import com.ringlearn.app.ui.settings.SettingsScreen
 import com.ringlearn.app.ui.study.StudyScreen
+import com.ringlearn.app.ui.tools.ToolsScreen
 import com.ringlearn.app.ui.wordbook.WordBookScreen
 import kotlin.math.roundToInt
 import kotlinx.serialization.Serializable
@@ -49,6 +51,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object QuizKey : NavKey
 @Serializable data object LookupKey : NavKey
 @Serializable data object AiKey : NavKey
+@Serializable data object ToolsKey : NavKey
+@Serializable data object SettingsKey : NavKey
 
 private data class BottomDestination(
     val key: NavKey,
@@ -58,12 +62,15 @@ private data class BottomDestination(
 
 private val bottomDestinations = listOf(
     BottomDestination(HomeKey, "首页", R.drawable.ic_home),
-    BottomDestination(StudyKey, "学习", R.drawable.ic_study),
-    BottomDestination(LookupKey, "查词", R.drawable.ic_search),
-    BottomDestination(WordBookKey, "生词本", R.drawable.ic_wordbook),
-    BottomDestination(QuizKey, "测验", R.drawable.ic_quiz),
+    BottomDestination(ToolsKey, "功能", R.drawable.ic_apps),
     BottomDestination(AiKey, "AI", R.drawable.ic_ai)
 )
+
+/** 四个工具页：不展示在底栏，经「功能」聚合页进入 */
+private val toolRoutes = setOf(StudyKey, LookupKey, WordBookKey, QuizKey)
+
+/** 所有「叶子」二级页（工具页 + 设置页），返回时回来源 Tab */
+private val leafRoutes = toolRoutes + SettingsKey
 
 /**
  * 应用根：底部导航 + 常驻 Tab 宿主 (KeepAliveNavHost) + 内置键盘覆盖层。
@@ -82,9 +89,11 @@ private val bottomDestinations = listOf(
 fun RingLearnApp() {
     val navigationState = rememberNavigationState(
         startRoute = HomeKey,
-        topLevelRoutes = setOf(HomeKey, StudyKey, WordBookKey, QuizKey, LookupKey, AiKey)
+        topLevelRoutes = setOf(
+            HomeKey, ToolsKey, StudyKey, WordBookKey, QuizKey, LookupKey, AiKey, SettingsKey
+        )
     )
-    val navigator = remember { Navigator(navigationState) }
+    val navigator = remember { Navigator(navigationState, leafRoutes, ToolsKey) }
     val inAppImeController = remember { InAppImeController() }
     val rootViewModel: RootViewModel = hiltViewModel()
     val useInAppKeyboard by rootViewModel.useInAppKeyboard.collectAsStateWithLifecycle()
@@ -100,26 +109,38 @@ fun RingLearnApp() {
         entryProvider {
             entry<HomeKey> {
                 HomeScreen(
+                    onNavigateToSettings = { navigator.navigate(SettingsKey) },
                     onNavigateToStudy = { navigator.navigate(StudyKey) },
                     onNavigateToWordBook = { navigator.navigate(WordBookKey) },
                     onNavigateToQuiz = { navigator.navigate(QuizKey) },
                     onNavigateToLookup = { navigator.navigate(LookupKey) }
                 )
             }
+            entry<ToolsKey> {
+                ToolsScreen(
+                    onNavigateToStudy = { navigator.navigate(StudyKey) },
+                    onNavigateToLookup = { navigator.navigate(LookupKey) },
+                    onNavigateToWordBook = { navigator.navigate(WordBookKey) },
+                    onNavigateToQuiz = { navigator.navigate(QuizKey) }
+                )
+            }
             entry<StudyKey> {
                 StudyScreen(onExit = { navigator.goBack() })
             }
             entry<WordBookKey> {
-                WordBookScreen()
+                WordBookScreen(onExit = { navigator.goBack() })
             }
             entry<QuizKey> {
                 QuizScreen(onExit = { navigator.goBack() })
             }
             entry<LookupKey> {
-                LookupScreen()
+                LookupScreen(onExit = { navigator.goBack() })
             }
             entry<AiKey> {
                 AiChatScreen()
+            }
+            entry<SettingsKey> {
+                SettingsScreen(onExit = { navigator.goBack() })
             }
         }
     }
@@ -148,8 +169,12 @@ fun RingLearnApp() {
                             bottomDestinations.forEach { destination ->
                                 key(destination.key) {
                                     // 每个 item 独立作用域读路由：切 Tab 只重组受影响的 item
-                                    val selected =
-                                        LocalActiveRoute.current.value == destination.key
+                                    val activeRoute = LocalActiveRoute.current.value
+                                    val selected = when (destination.key) {
+                                        HomeKey -> activeRoute == HomeKey || activeRoute == SettingsKey
+                                        ToolsKey -> activeRoute == ToolsKey || activeRoute in toolRoutes
+                                        else -> activeRoute == destination.key
+                                    }
                                     NavigationBarItem(
                                         selected = selected,
                                         onClick = { navigator.navigate(destination.key) },
@@ -202,7 +227,7 @@ fun RingLearnApp() {
  */
 @Composable
 private fun AppBackHandler(navigationState: NavigationState) {
-    val navigator = remember(navigationState) { Navigator(navigationState) }
+    val navigator = remember(navigationState) { Navigator(navigationState, leafRoutes, ToolsKey) }
     val isHome = LocalActiveRoute.current.value == HomeKey
     BackHandler(enabled = !isHome) {
         navigator.goBack()

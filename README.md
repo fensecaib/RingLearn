@@ -15,7 +15,9 @@ RingLearn 是一款使用 **Kotlin + Jetpack Compose** 从零构建的日语（J
 
 | 模块 | 说明 |
 | --- | --- |
-| 首页 | Compose Canvas 环形学习进度、火焰连击天数、待复习角标、快捷操作（开始背词 / 生词本 / 随机测验 / 查词）、每日目标滑块、系统设置（提醒 / 音效 / 震动 / 自动发音 / 主题）、进度重置（AlertDialog 二次确认） |
+| 首页 | Compose Canvas 环形学习进度、火焰连击天数、待复习角标、快捷操作（开始背词 / 生词本 / 随机测验 / 查词）、每日目标滑块、进度重置（AlertDialog 二次确认）；顶栏齿轮进入「设置」页 |
+| 功能页 | 学习 / 查词 / 生词本 / 测验 的二级聚合入口（2×2 白卡网格，Saku 风格） |
+| 设置页 | 学习提醒 / 主题 / 音效 / 震动 / 自动发音（原首页「系统设置」卡片迁入） |
 | 学习页 | 3D 翻转单词卡（graphicsLayer.rotationY）、左右上滑手势（detectDragGestures）、背后语义色指示条、原生 TTS 日语发音、本轮统计弹窗（正确率 / 用时） |
 | 查词页 | **三种输入方式**：应用内置罗马音键盘（默认）/ 系统输入法 / 手写汉字；实时 Room 查询（表记 / 假名 / 中文释义，精确匹配优先）；结果卡片（TTS 朗读 / 加入生词本） |
 | 内置输入法 | 应用内置 QWERTY 键盘 + **罗马音→假名引擎**（RomajiEngine），默认用于全部输入框（查词、生词本搜索）；键盘上“⌨”一键切换系统输入法，设置持久化 |
@@ -121,7 +123,7 @@ app/src/main/java/com/ringlearn/app/
 │   ├── RootViewModel.kt                // 主题模式 StateFlow
 │   ├── theme/                          // Material3 配色（浅色/深色）
 │   ├── navigation/
-│   │   ├── RingLearnApp.kt             // 底部导航 + 内置键盘覆盖层（根组件）
+│   │   ├── RingLearnApp.kt             // 底部导航（首页/功能/AI）+ 内置键盘覆盖层（根组件）
 │   │   ├── KeepAliveNavHost.kt         // ★ 常驻 Tab 宿主（首访后保持组合，切换仅 alpha）
 │   │   └── NavigationState.kt          // 多 back stack 导航状态（官方范式）
 │   ├── components/                     // 环形进度 / 火焰 / 空状态 / 加载状态
@@ -131,6 +133,8 @@ app/src/main/java/com/ringlearn/app/
 │   ├── ime/                            // ★ 内置键盘 + RingLearnTextField（输入法拦截/切换）
 │   ├── wordbook/                       // 生词本
 │   └── quiz/                           // 随机测验
+│   ├── tools/                          // 功能聚合页（学习/查词/生词本/测验二级入口）
+│   └── settings/                       // 设置页（提醒/主题/音效/震动/自动发音）
 └── util/
     ├── TtsManager.kt                   // ★ 原生 TextToSpeech 封装
     ├── HapticManager.kt                // ★ VibrationEffect 触觉反馈
@@ -239,8 +243,10 @@ dueAt = now + interval * 24h
 - Repository 暴露 `Flow`；ViewModel 用 `combine` + `stateIn` 合并为 `StateFlow<UiState>`。
 - 首页看板（今日已学、待复习、掌握数、连续天数）全部来自 Room Flow，数据变化自动刷新。
 - 设置（主题 / 目标 / 提醒 / 开关 / 输入法）写入 DataStore，主题模式由 `RootViewModel` 全局收集并驱动 `RingLearnTheme`。
-- 导航采用 **Navigation 3**：每个顶级 Tab 独立 back stack（`NavigationState` + `Navigator`），
-  切换 Tab 保留状态；ViewModels 通过 `hilt-lifecycle-viewmodel-compose` + `ViewModelStoreNavEntryDecorator` 作用域化到 Nav3 条目。
+- 导航采用 **Navigation 3**：每个顶级路由独立 back stack（`NavigationState` + `Navigator`）；
+  底栏展示首页/功能/AI 三个 Tab，学习/查词/生词本/测验经「功能」聚合页、设置经首页顶栏齿轮进入
+  （隐藏叶子路由，返回键回来源 Tab），切换 Tab 保留状态；
+  ViewModels 通过 `hilt-lifecycle-viewmodel-compose` + `ViewModelStoreNavEntryDecorator` 作用域化到 Nav3 条目。
 
 
 ### 5.9 AI 对话（OpenAI 兼容 · DeepSeek）
@@ -278,12 +284,12 @@ dueAt = now + interval * 24h
 Navigation 3 的 `NavDisplay` 基于 `AnimatedContent` 只组合当前场景：每次切换 Tab 都会销毁旧屏并整树重建目标屏
 （弱机实测单次 250–400ms 长帧）。本项目以自定义宿主 `KeepAliveNavHost` 替代 `NavDisplay`：
 
-- 5 个顶级 Tab 各自拥有独立 back stack（`rememberDecoratedNavEntries`，以 `backStack` 为 remember key，条目与 `content` lambda 实例稳定）。
+- 顶级路由各自拥有独立 back stack（`rememberDecoratedNavEntries`，以 `backStack` 为 remember key，条目与 `content` lambda 实例稳定）；底栏展示 3 个 Tab（首页/功能/AI），学习等页面为隐藏叶子路由经功能页二级进入。
 - **懒加载首访常驻**：冷启动只组合首页；首次切到某 Tab 才组合该屏，之后保持组合。
 - 切换仅改变 `graphicsLayer { alpha }`（0ms 瞬时）与 z 序；非激活屏 `alpha=0` 不绘制 + `pointerInput` 全事件拦截 + `clearAndSetSemantics` 移出无障碍树。
 - 内容 lambda 用 `remember(entry)` 稳定化：切换时外层 Box 的 Modifier 变化不会重新执行 `entry.Content()`，屏幕子树真正保持组合
   （logcat 实测切换时屏幕零重组合、`Composer.dispose` 0 次）。
-- 返回键由根层 `BackHandler` 处理（非首页 Tab 优先回首页）。
+- 返回键由根层 `BackHandler` 处理（二级叶子页回来源 Tab，其余非首页 Tab 回首页）。
 
 真机（i6310 Pro / Android 12 / 720×1440）`dumpsys gfxinfo` 对比（重复 Home↔Study×4，release 构建）：
 
@@ -298,6 +304,8 @@ Navigation 3 的 `NavDisplay` 基于 `AnimatedContent` 只组合当前场景：�
 
 > 剩余 99 分位单帧（~150ms）为弱机对全屏 Compose 场景的 measure+draw 重录成本，任何全屏切换架构（含 NavDisplay）都需支付；
 > 90/95 分位与稳态帧率已显著优于基线，且切换不再触发屏幕重组合/重建。
+>
+> 注：底栏现已收敛为 3 Tab（首页/功能/AI），上表为多 Tab 时期的历史基线，当前以优化前后相对变化验收。
 
 ### 6.2 Release 构建（R8 + 资源压缩）
 

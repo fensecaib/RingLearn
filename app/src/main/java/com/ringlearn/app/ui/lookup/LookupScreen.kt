@@ -91,6 +91,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LookupScreen(
+    onExit: () -> Unit,
     viewModel: LookupViewModel = hiltViewModel()
 ) {
     val haptic = rememberHapticManager()
@@ -115,7 +116,20 @@ fun LookupScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0),
-        topBar = { SakuTopBar(title = { Text("查词") }) }
+        topBar = {
+            SakuTopBar(
+                title = { Text("查词") },
+                navigationIcon = {
+                    IconButton(onClick = onExit) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_arrow_back),
+                            contentDescription = "返回",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            )
+        }
     ) { padding ->
         val ime = rememberRingLearnImeState(
             state = textFieldState,

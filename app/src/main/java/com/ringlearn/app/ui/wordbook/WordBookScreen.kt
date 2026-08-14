@@ -62,6 +62,7 @@ import kotlinx.coroutines.launch
 /** 生词本：搜索（内置罗马音键盘/系统输入法）+ 列表 + 移除 */
 @Composable
 fun WordBookScreen(
+    onExit: () -> Unit,
     viewModel: WordBookViewModel = hiltViewModel()
 ) {
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
@@ -107,7 +108,18 @@ fun WordBookScreen(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            SakuTopBar(title = { Text("生词本") })
+            SakuTopBar(
+                title = { Text("生词本") },
+                navigationIcon = {
+                    IconButton(onClick = onExit) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_arrow_back),
+                            contentDescription = "返回",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
