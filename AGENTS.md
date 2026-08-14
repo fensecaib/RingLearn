@@ -54,8 +54,8 @@ adb -s 01772412127937 install -r app\build\outputs\apk\debug\app-debug.apk
 
 ## 4. 架构不变量（破坏即回归）
 
-1. **内置键盘覆盖层**：底部 `NavigationBar` **常驻**（仅系统 IME 可见时隐藏）；内置键盘是根层覆盖物（`InAppKeyboardOverlay`）盖在底栏之上，常驻组合 + `offset` 布局位移开合（背景+内容+命中区域整体移动，lambda 延迟读取不重组）；默认收起、点输入框弹出。外点收起仅覆盖各页内容区（消息区/结果区，`dismissInAppImeOnTap`），点输入框/发送按钮/顶栏不收起。禁止改回「移除底栏 + 页内键盘」；隐藏时必须整体移出屏幕，禁止用 `graphicsLayer` 平移绘制内容导致背景残留在原布局位置（留白/拦截下半屏触摸）。
-2. **输入抬升量公式**：`lift = pageContentBottomPx - overlayTopPx`——nav host 与覆盖层 Column 用 `positionInRoot()` **同坐标系实测**（RingLearnApp / InAppImeController）。不要改回 `keyboardHeightPx - dockHeightPx` 推导（有 inset 偏差）。
+1. **内置键盘覆盖层**：底部 `NavigationBar` **常驻**（仅系统 IME 可见时隐藏）；内置键盘是根层覆盖物（`InAppKeyboardOverlay`）盖在底栏之上，常驻组合 + `offset` 布局位移开合（背景+内容+命中区域整体移动，lambda 延迟读取不重组）；默认收起、点输入框弹出。外点收起仅覆盖各页内容区（消息区/结果区，`dismissInAppImeOnTap`），点输入框/发送按钮/顶栏不收起。禁止改回「移除底栏 + 页内键盘」；隐藏时必须整体移出屏幕，禁止用 `graphicsLayer` 平移绘制内容导致背景残留在原布局位置（留白/拦截下半屏触摸）。覆盖层 Column 的尺寸/位置测量必须放在 `navigationBarsPadding` **外侧**（隐藏位移要含底部导航栏 padding），`surfaceContainer` 背景必须放在其**内侧**（键盘表面止于系统导航栏上沿，不被手势条/底部导航条覆盖）；两者任一顺序破坏即回归。
+2. **输入抬升量公式**：`lift = pageContentBottomPx - overlayTopPx`——nav host 与覆盖层 Column 用 `positionInRoot()` **同坐标系实测**（RingLearnApp / InAppImeController）。不要改回 `overlayFullHeightPx - dockHeightPx` 推导（有 inset 偏差）。
 3. **纯离线约束**：除 AI 对话外全部离线。真机**无 Google Play services**（UROVO i6310 Pro）——凡依赖 GMS 的方案（ML Kit 等）不可用。动画/TTS/手写用系统 API 或自研，零重型第三方库。
 4. **AI 对话**：OpenAI 兼容 + SSE 流式 + **完整上下文（不压缩）**；API Key 绝不入库（DataStore + Keystore AES/GCM）。
 5. **性能不变量**：`KeepAliveNavHost` 6 Tab 常驻组合；首页火焰动画仅首页激活时运行；AI 流式节流（80ms/16 字符）且结束必 flush；候选栏空态收起（纯 fade）。根层禁止直接读 `navigationState.topLevelRoute`（用稳定 `State<NavKey>` 经 `LocalActiveRoute` 在叶子作用域读 `.value`，切 Tab 不重组整棵根树）；页面顶层禁止集中收集多个高频 StateFlow（在子组合内收集，键入/发送/模式切换只重组对应区域）；`InAppImeController` 保持 `@Stable`（属性全为 snapshot state）。弱机（i6310 Pro）16.6ms 预算难达成，以「优化前后相对变化」验收。
@@ -91,7 +91,7 @@ adb -s 01772412127937 install -r app\build\outputs\apk\debug\app-debug.apk
 
 **🚫 Never（禁止）**
 - 提交 `sk-*` API Key、Keystore 密文、`.codex/`、构建产物与日志。
-- 改回「移除底栏 + 页内键盘」；改回 `keyboardHeightPx - dockHeightPx` 推导。
+- 改回「移除底栏 + 页内键盘」；改回 `overlayFullHeightPx - dockHeightPx` 推导。
 - 引入 GMS / ML Kit 依赖（真机无 Play services）。
 - 主线程 `runBlocking`；破坏 82 个单测的全绿状态。
 
