@@ -27,6 +27,18 @@ val SakuCardBorder = Color(0x1F2C4A5A)
 val SakuCyanGlow = Color(0x3D79D4E4)
 /** 黄色按钮光晕 */
 val SakuYellowGlow = Color(0x59FED25F)
+/** 暖黄 hover 加深（参考站 CTA 按钮 hover） */
+val SakuYellowDeep = Color(0xFFF0C830)
+/** 输入框底色（参考站输入框） */
+val SakuFieldBg = Color(0xFFFAFCFF)
+/** 内嵌面板/规格格底、次级按钮 hover（参考站） */
+val SakuPanelBg = Color(0xFFF7FAFB)
+/** 图片舞台与媒体占位底、图标按钮 hover（参考站） */
+val SakuStageBg = Color(0xFFF4F8FA)
+/** 页面装饰浅青光斑（参考站） */
+val SakuMistCyan = Color(0xFFD8EEF5)
+/** 更浅装饰青（参考站） */
+val SakuMistCyanSoft = Color(0xFFE7F4F8)
 
 // ---- 卡片手势语义色 ----
 /** 右滑“认识” */
