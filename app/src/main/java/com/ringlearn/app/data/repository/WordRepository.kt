@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** 单词与学习进度的统一仓库，屏蔽 Room / 本地词库细节。 */
@@ -69,11 +71,15 @@ class WordRepository @Inject constructor(
     private val learnedTodayCount: Flow<Int> =
         nowTicker.flatMapLatest { wordDao.observeLearnedTodayCount(startOfDay(it)) }
 
+    /** N1 词条计数：首装时 N2 先入、N1 后入，两者都就绪前首页不解除 loading。 */
+    private val n1Count: Flow<Int> = wordDao.observeCountByJlpt("N1")
+
     val homeStats: Flow<HomeStats> = combine(
         combine(
             wordDao.observeTotalCount(),
-            learnedTodayCount
-        ) { total, learned -> total to learned },
+            learnedTodayCount,
+            n1Count
+        ) { total, learned, n1 -> Triple(total, learned, n1) },
         combine(
             dueCount,
             wordDao.observeMasteredCount()
@@ -82,7 +88,7 @@ class WordRepository @Inject constructor(
             wordDao.observeFavoriteCount(),
             reviewLogDao.observeReviewTimes()
         ) { fav, reviewTimes -> fav to reviewTimes }
-    ) { (total, learned), (due, mastered), (fav, reviewTimes) ->
+    ) { (total, learned, n1), (due, mastered), (fav, reviewTimes) ->
         HomeStats(
             totalWords = total,
             learnedToday = learned,
@@ -92,7 +98,7 @@ class WordRepository @Inject constructor(
             streakDays = computeStreakDays(reviewTimes),
             // 未学过的词 = 总数 - 已学过(reviewCount>0)；已学过但已到期的词不重复计入新词
             newWordCount = (total - mastered - due).coerceAtLeast(0),
-            isReady = total > 0
+            isReady = total > 0 && n1 > 0
         )
     }
 
@@ -100,7 +106,9 @@ class WordRepository @Inject constructor(
      * 内置词库种子（幂等）：空库先种 N2；老安装缺 N1 时增量补齐。
      * 用 (word, kana) 去重后仅插入缺失词条，既有自增 id 与学习进度零扰动。
      */
-    suspend fun ensureSeeded() {
+    private val seedMutex = Mutex()
+
+    suspend fun ensureSeeded() = seedMutex.withLock {
         if (wordDao.count() == 0) {
             seedLevel("jlpt_n2_words.json", "N2")
         }
@@ -133,7 +141,7 @@ class WordRepository @Inject constructor(
 
     /** 词库中出现过的全部唯一字符（用于构建手写识别模板，仅词库规模，轻量） */
     suspend fun getAllCharacters(): Set<Char> = withContext(Dispatchers.IO) {
-        wordDao.getAllWords()
+        wordDao.getWordKeys()
             .flatMap { (it.word + it.kana).asIterable() }
             .toSet()
     }

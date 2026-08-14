@@ -89,6 +89,10 @@ interface WordDao {
     @Query("SELECT COUNT(*) FROM words WHERE jlpt = :level")
     suspend fun countByJlpt(level: String): Int
 
+    /** 指定 JLPT 等级词条数的响应式计数（用于种子就绪门控）。 */
+    @Query("SELECT COUNT(*) FROM words WHERE jlpt = :level")
+    fun observeCountByJlpt(level: String): Flow<Int>
+
     /** 重置所有学习进度（保留词条本身） */
     @Query(
         "UPDATE words SET repetitions = 0, easeFactor = 2.5, intervalDays = 0, dueAt = 0, " +
