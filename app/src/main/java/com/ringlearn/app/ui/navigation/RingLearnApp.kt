@@ -159,6 +159,10 @@ fun RingLearnApp() {
         ) {
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
+                // 各页顶栏已自行 statusBarsPadding / 各页内容已自行管理 insets：
+                // 根层必须置空默认 contentWindowInsets，否则状态栏 inset 双重叠加，
+                // 导致所有页面顶栏多占 48px（顶栏内容从 y96 而非 y48 开始）。
+                contentWindowInsets = WindowInsets(0),
                 bottomBar = {
                     // 底栏常驻：仅在系统输入法模式下系统键盘可见时隐藏（被系统键盘盖住）；
                     // 内置键盘场景从不移除底栏（由覆盖层盖住）
