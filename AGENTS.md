@@ -2,7 +2,7 @@
 
 RingLearn 是 Kotlin + Jetpack Compose 的日语（JLPT N2）背单词 Android 应用。
 `applicationId=com.ringlearn.app`，`compileSdk=37 / targetSdk=36 / minSdk=31`（Android 12+），`versionName=1.0.0`。
-内置 1000 词词库、SM-2 间隔重复、自研内置罗马音输入法、离线手写识别、AI 对话（OpenAI 兼容）。
+内置 3000 词词库（N2 1000 + N1 2000）、SM-2 间隔重复、自研内置罗马音输入法、离线手写识别、AI 对话（OpenAI 兼容）。
 产品功能与设计见 [README.md](README.md)；本文只写新会话立刻需要知道的命令、风格、结构、边界与陷阱。
 
 ## 1. 构建与测试命令（Windows PowerShell）
@@ -22,7 +22,7 @@ $env:JAVA_HOME='D:\Apps\Android Studio\jbr'
 adb -s 01772412127937 install -r app\build\outputs\apk\debug\app-debug.apk
 ```
 
-- 单测共 **79 个**，改动后必须全绿；Gradle 输出偶被吞时用 `*> build_out.txt` 重定向查看。
+- 单测共 **82 个**，改动后必须全绿；Gradle 输出偶被吞时用 `*> build_out.txt` 重定向查看。
 - 测试类 FQCN（供 `--tests` 过滤）：
   - `com.ringlearn.app.domain.ime.RomajiEngineTest`（18 个，核心）
   - `com.ringlearn.app.domain.algorithm.Sm2SchedulerTest`（6 个）
@@ -48,7 +48,7 @@ adb -s 01772412127937 install -r app\build\outputs\apk\debug\app-debug.apk
 | `ui/ime/` | 内置键盘：InAppImeController、RomajiKeyboard、CandidateBar、RingLearnTextField、InAppImeBinding |
 | `ui/ai/AiChatScreen.kt` | AI 对话（懒加载 / 字号 / 滚动导航 / 上下文徽章） |
 | `ui/lookup\|wordbook\|study\|quiz\|home/` | 查词 / 生词本 / 学习 / 测验 / 首页 |
-| `data/` | Room（words/ai_chat/review_log）、Repository、AI 客户端；`assets/jlpt_n2_words.json` 1000 词 |
+| `data/` | Room（words/ai_chat/review_log）、Repository、AI 客户端；`assets/jlpt_n2_words.json`（1000 词）+ `jlpt_n1_words.json`（2000 词），整理脚本 `tools/curate_vocab.py` |
 | `domain/ime/RomajiEngine.kt` | 罗马音→假名引擎（有单测） |
 | `util/handwriting/HandwritingRecognizer.kt` | 离线手写（字形模板 + Chamfer） |
 
@@ -93,7 +93,7 @@ adb -s 01772412127937 install -r app\build\outputs\apk\debug\app-debug.apk
 - 提交 `sk-*` API Key、Keystore 密文、`.codex/`、构建产物与日志。
 - 改回「移除底栏 + 页内键盘」；改回 `keyboardHeightPx - dockHeightPx` 推导。
 - 引入 GMS / ML Kit 依赖（真机无 Play services）。
-- 主线程 `runBlocking`；破坏 79 个单测的全绿状态。
+- 主线程 `runBlocking`；破坏 82 个单测的全绿状态。
 
 ## 8. 安全（Security）
 
