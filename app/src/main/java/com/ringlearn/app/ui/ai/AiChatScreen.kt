@@ -119,6 +119,7 @@ import com.ringlearn.app.ui.components.SakuTopBar
 import com.ringlearn.app.ui.navigation.AiKey
 import com.ringlearn.app.ui.rememberHapticManager
 import com.ringlearn.app.ui.theme.FredokaBold
+import com.ringlearn.app.ui.theme.SakuYellowDeep
 import com.ringlearn.app.util.HapticManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -781,7 +782,7 @@ private fun AiWelcomeEmpty(onOpenSettings: () -> Unit, palette: SakuPalette) {
                 onClick = onOpenSettings,
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = palette.ctaBg,
+                    containerColor = if (ctaPressed) SakuYellowDeep else palette.ctaBg,
                     contentColor = palette.ctaFg
                 ),
                 interactionSource = ctaInteraction,
@@ -825,6 +826,8 @@ private fun AiInputBar(
     val sending by viewModel.sending.collectAsStateWithLifecycle()
     val sendInteraction = remember { MutableInteractionSource() }
     val sendPressed by sendInteraction.collectIsPressedAsState()
+    val stopInteraction = remember { MutableInteractionSource() }
+    val stopPressed by stopInteraction.collectIsPressedAsState()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -881,10 +884,17 @@ private fun AiInputBar(
                     },
                     shape = CircleShape,
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = palette.stopBg,
+                        containerColor = if (stopPressed) SakuYellowDeep else palette.stopBg,
                         contentColor = palette.stopIcon
                     ),
-                    modifier = Modifier.size(44.dp)
+                    interactionSource = stopInteraction,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .graphicsLayer {
+                            val scale = if (stopPressed) 0.97f else 1f
+                            scaleX = scale
+                            scaleY = scale
+                        }
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_close),

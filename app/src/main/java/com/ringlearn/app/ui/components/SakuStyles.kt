@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import com.ringlearn.app.ui.theme.SakuInk
 import com.ringlearn.app.ui.theme.SakuYellow
+import com.ringlearn.app.ui.theme.SakuYellowDeep
 
 /** Saku 卡片统一底色：白卡片（深色模式为最深的墨蓝卡）。 */
 @Composable
@@ -22,9 +23,9 @@ fun sakuCardColors(): CardColors = CardDefaults.cardColors(
 fun sakuCardBorder(): BorderStroke =
     BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
 
-/** Saku 主操作按钮：暖黄底 + 墨色文字。 */
+/** Saku 主操作按钮：暖黄底 + 墨色文字；按压态加深为 SakuYellowDeep（参考站 .btn-mea-download:hover/active）。 */
 @Composable
-fun sakuCtaButtonColors(): ButtonColors = ButtonDefaults.buttonColors(
-    containerColor = SakuYellow,
+fun sakuCtaButtonColors(pressed: Boolean = false): ButtonColors = ButtonDefaults.buttonColors(
+    containerColor = if (pressed) SakuYellowDeep else SakuYellow,
     contentColor = SakuInk
 )

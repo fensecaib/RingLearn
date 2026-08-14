@@ -21,6 +21,9 @@ import androidx.compose.ui.graphics.drawscope.scale
 /**
  * 使用 Compose Canvas 手绘的"连续学习火焰"图标（无需 Lottie / 第三方动画库）。
  * 火焰带有轻微缩放/摇摆的无限循环动画，底部附带渐变光晕。
+ *
+ * 火焰渐变色（#FDE68A/#F97316/#EF4444）为火焰语义专属调色，不属于 saku 表面令牌
+ * （青/黄/墨蓝），因此保持内联常量而不令牌化；动画仅在 active=true（首页 Tab 激活）时运行。
  */
 @Composable
 fun FlameIcon(

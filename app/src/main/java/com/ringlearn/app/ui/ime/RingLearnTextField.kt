@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.PlatformTextInputInterceptor
 import androidx.compose.ui.res.painterResource
@@ -54,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import com.ringlearn.app.R
 import com.ringlearn.app.data.local.entity.WordEntity
 import com.ringlearn.app.domain.ime.RomajiEngine
+import com.ringlearn.app.ui.theme.SakuFieldBg
 import com.ringlearn.app.util.HapticManager
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -210,9 +212,15 @@ fun RingLearnImeField(
     onShowKeyboard: (() -> Unit)? = null,
     maxLines: Int = 1,
     minHeight: Dp = 52.dp,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    // 浅色用参考站输入框底 #FAFCFF，深色复用 surfaceContainerHigh（#2C4A5A）；与规范一致。
+    containerColor: Color = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    } else {
+        SakuFieldBg
+    },
     containerShape: Shape = RoundedCornerShape(16.dp),
-    containerBorder: BorderStroke? = null,
+    // 默认 12% 墨色描边（outlineVariant 已映射为 SakuCardBorder），焦点青描边由调用方显式传入。
+    containerBorder: BorderStroke? = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     glowColor: Color = Color.Transparent,
     glowElevation: Dp = 0.dp,
     accentColor: Color = MaterialTheme.colorScheme.primary,

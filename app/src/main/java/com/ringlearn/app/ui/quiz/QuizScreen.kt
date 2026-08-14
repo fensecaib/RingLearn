@@ -1,5 +1,7 @@
 package com.ringlearn.app.ui.quiz
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -240,9 +242,12 @@ private fun QuizQuestionView(
         }
 
         if (selected != null) {
+            val nextInteraction = remember { MutableInteractionSource() }
+            val nextPressed by nextInteraction.collectIsPressedAsState()
             Button(
                 onClick = { haptic.click(); onNext() },
-                colors = sakuCtaButtonColors(),
+                colors = sakuCtaButtonColors(pressed = nextPressed),
+                interactionSource = nextInteraction,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
@@ -306,6 +311,8 @@ private fun QuizResult(
     onExit: () -> Unit
 ) {
     val percent = if (total > 0) score * 100 / total else 0
+    val restartInteraction = remember { MutableInteractionSource() }
+    val restartPressed by restartInteraction.collectIsPressedAsState()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -333,7 +340,8 @@ private fun QuizResult(
         Spacer(Modifier.height(32.dp))
         Button(
             onClick = { haptic.click(); onRestart() },
-            colors = sakuCtaButtonColors(),
+            colors = sakuCtaButtonColors(pressed = restartPressed),
+            interactionSource = restartInteraction,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
