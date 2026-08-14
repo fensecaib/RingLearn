@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ringlearn.app.R
@@ -141,7 +142,7 @@ fun StudyScreen(
         }
     }
 
-    if (uiState.roundFinished) {
+    if (uiState.roundFinished && activeRoute == StudyKey) {
         RoundStatsDialog(
             state = uiState,
             elapsedSeconds = elapsedSeconds,
@@ -239,7 +240,8 @@ private fun RoundStatsDialog(
 ) {
     val accuracy = (state.accuracy * 100).roundToInt()
     AlertDialog(
-        onDismissRequest = {},
+        onDismissRequest = onExit,
+        properties = DialogProperties(dismissOnClickOutside = false),
         title = { Text("本轮学习完成 🎉") },
         text = {
             Column {
